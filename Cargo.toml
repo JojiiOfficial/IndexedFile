@@ -1,9 +1,19 @@
 [package]
 name = "indexed_file"
 version = "0.1.0"
+description = "A library to index and read large files by its lines efficiently"
 authors = ["jojii <jojii@gmx.net>"]
 edition = "2018"
-license = "GPLv3"
+license = "AGPL-3.0"
+repository = "https://github.com/JojiiOfficial/IndexedFile"
+
+[[example]]
+name = "simple"
+path = "examples/simple.rs"
+
+[[example]]
+name = "index_file"
+path = "examples/index_file.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,3 +21,6 @@ license = "GPLv3"
 async-std = {version="1.9.0", features = ["attributes"]}
 async-trait = "0.1.50"
 itertools = "0.10.1"
+
+[dev-dependencies]
+async-std = {version="1.9.0", features = ["attributes"]}
