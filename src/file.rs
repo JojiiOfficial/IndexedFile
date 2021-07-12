@@ -16,6 +16,7 @@ pub struct File {
     pub inner_file: BufReader<fs::File>,
     index: Index,
     last_line: Option<usize>,
+    curr_pos: u64,
 }
 
 impl File {
@@ -31,6 +32,7 @@ impl File {
             index,
             inner_file,
             last_line: None,
+            curr_pos: 0,
         })
     }
 
@@ -44,6 +46,7 @@ impl File {
             index,
             inner_file,
             last_line: None,
+            curr_pos: 0,
         })
     }
 
@@ -56,6 +59,7 @@ impl File {
             index,
             inner_file,
             last_line: None,
+            curr_pos: 0,
         })
     }
 }
@@ -78,23 +82,29 @@ impl IndexableFile for File {
             buf.pop();
         }
 
+        self.curr_pos += res as u64;
+
         Ok(res)
     }
 
     #[inline(always)]
-    async fn seek_line(&mut self, line: usize) -> Result<u64> {
+    async fn seek_line(&mut self, line: usize) -> Result<()> {
         // We don't need to seek if we're sequencially reading the file, aka. if
         // line == last_line + 1
         if let Some(last_line) = self.last_line {
             if line == last_line + 1 {
                 self.last_line = Some(line);
-                return Ok(0);
+                return Ok(());
             }
         }
 
         self.last_line = Some(line);
         let seek_pos = self.get_offset(line)?;
-        Ok(self.inner_file.seek(SeekFrom::Start(seek_pos)).await?)
+
+        // Calculate offset of position we want to jump to from current position
+        let offset = seek_pos as i64 - self.curr_pos as i64;
+        self.curr_pos = self.inner_file.seek(SeekFrom::Current(offset)).await?;
+        Ok(())
     }
 
     async fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
@@ -110,6 +120,10 @@ impl IndexableFile for File {
 
         // Copy file
         bytes_written += io::copy(&mut self.inner_file, writer).await? as usize;
+
+        // Reset file back to start position
+        self.inner_file.seek(SeekFrom::Start(0)).await?;
+        self.curr_pos = 0;
 
         Ok(bytes_written)
     }

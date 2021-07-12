@@ -9,8 +9,6 @@ use indexed_file::{File, Indexable, ReadByLine};
 use rand::distributions::Uniform;
 use rand::Rng;
 
-const LINES_TO_READ: usize = 1;
-
 fn random_lines_bench(c: &mut Criterion) {
     c.bench_function("read random lines", |b| {
         b.to_async(AsyncStdExecutor)
@@ -19,7 +17,7 @@ fn random_lines_bench(c: &mut Criterion) {
 
                 let lines: Vec<_> = rand::thread_rng()
                     .sample_iter(Uniform::new(0, file.total_lines() - 1))
-                    .take(LINES_TO_READ)
+                    .take(file.total_lines())
                     .collect();
 
                 let start = Instant::now();

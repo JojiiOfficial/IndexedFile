@@ -2,8 +2,8 @@
 
 pub mod error;
 pub mod file;
-pub mod shared_file;
 pub mod index;
+pub mod shared_file;
 
 use async_std::io::Write;
 pub use file::File;
@@ -35,7 +35,7 @@ pub trait IndexableFile: Indexable {
     async fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize>;
 
     /// Should seek the file to the given line `line`
-    async fn seek_line(&mut self, line: usize) -> Result<u64>;
+    async fn seek_line(&mut self, line: usize) -> Result<()>;
 
     /// Write the index, followed by the files contents into `writer`. A file generated using this
     /// function will always be parsable by `File::open`.
@@ -44,11 +44,7 @@ pub trait IndexableFile: Indexable {
     /// Should return the offset to seek to given the line-index
     #[inline(always)]
     fn get_offset(&self, line: usize) -> Result<u64> {
-        self.get_index()
-            .get(line)
-            // The indexed value represents the position of the line in the original file. We need
-            // to add the amount of bytes of the index to the seek position.
-            .map(|i| i + (self.get_index_byte_len() as u64))
+        self.get_index().get(line)
     }
 }
 
