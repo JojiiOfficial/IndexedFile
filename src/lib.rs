@@ -24,15 +24,15 @@ pub trait ReadByLine {
     fn get_offset(&self, line: usize) -> Result<u64>;
 
     /// Should seek to the reader used in `read_to_eol` to the given `SeekFrom`
-    async fn seek(&mut self, pos: SeekFrom) -> Result<u64>;
+    async fn seek(&mut self, line: usize) -> Result<u64>;
 
     /// Should read from the current position until the end of the line, omitting the \n
     async fn read_to_eol(&mut self, buf: &mut Vec<u8>) -> Result<usize>;
 
     /// Reads the given line
     async fn read_line(&mut self, line: usize) -> Result<String> {
-        let seek_pos = self.get_offset(line)?;
-        self.seek(SeekFrom::Start(seek_pos)).await?;
+        self.seek(line).await?;
+
         let mut read_data = Vec::new();
         self.read_to_eol(&mut read_data).await?;
         Ok(String::from_utf8(read_data)?)
@@ -40,8 +40,7 @@ pub trait ReadByLine {
 
     /// Reads the given line and stores into `buf`
     async fn read_line_raw(&mut self, line: usize, buf: &mut Vec<u8>) -> Result<usize> {
-        let seek_pos = self.get_offset(line)?;
-        self.seek(SeekFrom::Start(seek_pos)).await?;
+        self.seek(line).await?;
         Ok(self.read_to_eol(buf).await?)
     }
 }
@@ -52,6 +51,7 @@ pub trait ReadByLine {
 pub struct File {
     pub inner_file: BufReader<fs::File>,
     index: Index,
+    last_line: Option<usize>,
 }
 
 impl File {
@@ -63,7 +63,11 @@ impl File {
 
         let index = Self::parse_index(&mut inner_file).await?;
 
-        Ok(Self { index, inner_file })
+        Ok(Self {
+            index,
+            inner_file,
+            last_line: None,
+        })
     }
 
     /// Opens a non indexed file and generates the index.
@@ -72,7 +76,11 @@ impl File {
 
         let index = Index::build(&mut inner_file).await?;
 
-        Ok(Self { inner_file, index })
+        Ok(Self {
+            index,
+            inner_file,
+            last_line: None,
+        })
     }
 
     /// Opens a non indexed file and uses a custom index `index`.
@@ -80,7 +88,11 @@ impl File {
     pub async fn open_custom<P: AsRef<Path>>(path: P, index: Index) -> Result<File> {
         let inner_file = BufReader::new(fs::File::open(path).await?);
 
-        Ok(Self { inner_file, index })
+        Ok(Self {
+            index,
+            inner_file,
+            last_line: None,
+        })
     }
 
     /// Writes the index, followed by the files contents into `writer`. A file generated using this
@@ -103,11 +115,13 @@ impl File {
     }
 
     /// Returns the total amount of lines of the file.
+    #[inline]
     pub fn total_lines(&self) -> usize {
         self.index.len()
     }
 
     /// Returns a reference to the files index.
+    #[inline]
     pub fn get_index(&self) -> &Index {
         &self.index
     }
@@ -130,6 +144,7 @@ impl File {
 
 #[async_trait]
 impl ReadByLine for File {
+    #[inline(always)]
     fn get_offset(&self, line: usize) -> Result<u64> {
         self.index
             .get(line)
@@ -138,10 +153,23 @@ impl ReadByLine for File {
             .map(|i| i + (self.index.len_bytes() as u64))
     }
 
-    async fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
-        Ok(self.inner_file.seek(pos).await?)
+    #[inline(always)]
+    async fn seek(&mut self, line: usize) -> Result<u64> {
+        // We don't need to seek if we're sequencially reading the file, aka. if
+        // line == last_line + 1
+        if let Some(last_line) = self.last_line {
+            if line == last_line + 1 {
+                self.last_line = Some(line);
+                return Ok(0);
+            }
+        }
+
+        self.last_line = Some(line);
+        let seek_pos = self.get_offset(line)?;
+        Ok(self.inner_file.seek(SeekFrom::Start(seek_pos)).await?)
     }
 
+    #[inline(always)]
     async fn read_to_eol(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         let res = self.inner_file.read_until(b'\n', buf).await?;
 
@@ -156,9 +184,8 @@ impl ReadByLine for File {
 
 #[cfg(test)]
 mod tests {
-    use async_std::{fs, stream::StreamExt};
-
     use super::*;
+    use async_std::{fs, stream::StreamExt};
 
     #[async_std::test]
     async fn test_empty() {
@@ -167,7 +194,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn test_indexing() {
+    async fn test_sequencial() {
         let input_files = &["input1", "LICENSE"];
         let output_file = "./test1_out";
 
