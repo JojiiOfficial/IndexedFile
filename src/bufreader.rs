@@ -1,41 +1,36 @@
-use std::io::SeekFrom;
+use std::{io::SeekFrom, sync::Arc};
 
-use async_std::{
-    fs,
-    io::{self, prelude::*, BufReader, Write},
-    path::Path,
-};
-
-use crate::{index::Index, Indexable, IndexableFile, Result};
+use crate::Result;
+use async_std::io::{self, prelude::*, BufReader, Read, Write};
 use async_trait::async_trait;
 
-/// A wrapper around `async_std::fs::File` which implements `ReadByLine` and holds a reference to
-/// an index.
+use crate::{index::Index, Indexable, IndexableFile};
+
+/// A wrapper around `async_std::fs::File` which implements `ReadByLine` and holds an index of the
+/// lines.
 #[derive(Debug)]
-pub struct SharedFile<'a> {
-    pub inner_file: BufReader<fs::File>,
-    last_line: Option<usize>,
-    index: &'a Index,
-    curr_pos: u64,
+pub struct IndexedBufReader<R: Read + Unpin + Seek> {
+    pub reader: BufReader<R>,
+    pub(crate) index: Arc<Index>,
+    pub(crate) last_line: Option<usize>,
+    pub(crate) curr_pos: u64,
 }
 
-impl<'a> SharedFile<'a> {
+impl<R: Read + Unpin + Seek> IndexedBufReader<R> {
     /// Open a new indexed file.
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
-    pub async fn open<P: AsRef<Path>>(path: P, index: &'a Index) -> Result<SharedFile<'a>> {
-        let inner_file = BufReader::new(fs::File::open(path).await?);
-
+    pub fn new(reader: BufReader<R>, index: Arc<Index>) -> Result<IndexedBufReader<R>> {
         Ok(Self {
             index,
-            inner_file,
+            reader,
             last_line: None,
             curr_pos: 0,
         })
     }
 }
 
-impl<'a> Indexable for SharedFile<'a> {
+impl<R: Read + Unpin + Seek> Indexable for IndexedBufReader<R> {
     #[inline]
     fn get_index(&self) -> &Index {
         &self.index
@@ -43,10 +38,10 @@ impl<'a> Indexable for SharedFile<'a> {
 }
 
 #[async_trait]
-impl<'a> IndexableFile for SharedFile<'a> {
+impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
     #[inline(always)]
     async fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        let res = self.inner_file.read_until(b'\n', buf).await?;
+        let res = self.reader.read_until(b'\n', buf).await?;
 
         // Pop last \n if existing
         if res > 0 && *buf.last().unwrap() == b'\n' {
@@ -74,7 +69,7 @@ impl<'a> IndexableFile for SharedFile<'a> {
 
         // Calculate offset of position we want to jump to from current position
         let offset = seek_pos as i64 - self.curr_pos as i64;
-        self.curr_pos = self.inner_file.seek(SeekFrom::Current(offset)).await?;
+        self.curr_pos = self.reader.seek(SeekFrom::Current(offset)).await?;
         Ok(())
     }
 
@@ -87,13 +82,13 @@ impl<'a> IndexableFile for SharedFile<'a> {
 
         // We want to get all bytes. Since the seek position might change over time (eg. by using
         // read_line) we have to seek to the beginning
-        self.inner_file.seek(SeekFrom::Start(0)).await?;
+        self.reader.seek(SeekFrom::Start(0)).await?;
 
         // Copy file
-        bytes_written += io::copy(&mut self.inner_file, writer).await? as usize;
+        bytes_written += io::copy(&mut self.reader, writer).await? as usize;
 
         // Reset file back to start position
-        self.inner_file.seek(SeekFrom::Start(0)).await?;
+        self.reader.seek(SeekFrom::Start(0)).await?;
         self.curr_pos = 0;
 
         Ok(bytes_written)

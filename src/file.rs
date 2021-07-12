@@ -1,22 +1,19 @@
-use std::io::SeekFrom;
+use std::{io::SeekFrom, sync::Arc};
 
 use async_std::{
     fs,
-    io::{self, prelude::*, BufReader, Write},
+    io::{prelude::*, BufReader, Write},
     path::Path,
 };
-
-use crate::{index::Index, Indexable, IndexableFile, Result};
 use async_trait::async_trait;
+
+use crate::{bufreader, index::Index, Indexable, IndexableFile, Result};
 
 /// A wrapper around `async_std::fs::File` which implements `ReadByLine` and holds an index of the
 /// lines.
 #[derive(Debug)]
 pub struct File {
-    pub inner_file: BufReader<fs::File>,
-    index: Index,
-    last_line: Option<usize>,
-    curr_pos: u64,
+    index_reader: bufreader::IndexedBufReader<fs::File>,
 }
 
 impl File {
@@ -28,12 +25,7 @@ impl File {
 
         let index = Index::parse_index(&mut inner_file).await?;
 
-        Ok(Self {
-            index,
-            inner_file,
-            last_line: None,
-            curr_pos: 0,
-        })
+        Self::from_buf_reader(inner_file, Arc::new(index))
     }
 
     /// Open a non indexed file and generates the index.
@@ -42,32 +34,29 @@ impl File {
 
         let index = Index::build(&mut inner_file).await?;
 
-        Ok(Self {
-            index,
-            inner_file,
-            last_line: None,
-            curr_pos: 0,
-        })
+        inner_file.seek(SeekFrom::Start(0)).await?;
+
+        Self::from_buf_reader(inner_file, Arc::new(index))
     }
 
     /// Open a non indexed file and uses a custom index `index`.
     /// Expects the index to be properly built.
-    pub async fn open_custom<P: AsRef<Path>>(path: P, index: Index) -> Result<File> {
+    pub async fn open_custom<P: AsRef<Path>>(path: P, index: Arc<Index>) -> Result<File> {
         let inner_file = BufReader::new(fs::File::open(path).await?);
+        Self::from_buf_reader(inner_file, index)
+    }
 
-        Ok(Self {
-            index,
-            inner_file,
-            last_line: None,
-            curr_pos: 0,
-        })
+    /// Creates a new `File` using an existing `async_std::io::BufReader` and index
+    pub fn from_buf_reader(reader: BufReader<fs::File>, index: Arc<Index>) -> Result<File> {
+        let index_reader = bufreader::IndexedBufReader::new(reader, index)?;
+        Ok(Self { index_reader })
     }
 }
 
 impl Indexable for File {
     #[inline]
     fn get_index(&self) -> &Index {
-        &self.index
+        &self.index_reader.index
     }
 }
 
@@ -75,56 +64,15 @@ impl Indexable for File {
 impl IndexableFile for File {
     #[inline(always)]
     async fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        let res = self.inner_file.read_until(b'\n', buf).await?;
-
-        // Pop last \n if existing
-        if res > 0 && *buf.last().unwrap() == b'\n' {
-            buf.pop();
-        }
-
-        self.curr_pos += res as u64;
-
-        Ok(res)
+        self.index_reader.read_current_line(buf).await
     }
 
     #[inline(always)]
     async fn seek_line(&mut self, line: usize) -> Result<()> {
-        // We don't need to seek if we're sequencially reading the file, aka. if
-        // line == last_line + 1
-        if let Some(last_line) = self.last_line {
-            if line == last_line + 1 {
-                self.last_line = Some(line);
-                return Ok(());
-            }
-        }
-
-        self.last_line = Some(line);
-        let seek_pos = self.get_offset(line)?;
-
-        // Calculate offset of position we want to jump to from current position
-        let offset = seek_pos as i64 - self.curr_pos as i64;
-        self.curr_pos = self.inner_file.seek(SeekFrom::Current(offset)).await?;
-        Ok(())
+        self.index_reader.seek_line(line).await
     }
 
     async fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
-        let encoded_index = self.get_index().encode();
-        let mut bytes_written = encoded_index.len();
-
-        // Write the index to the file
-        writer.write_all(&encoded_index).await?;
-
-        // We want to get all bytes. Since the seek position might change over time (eg. by using
-        // read_line) we have to seek to the beginning
-        self.inner_file.seek(SeekFrom::Start(0)).await?;
-
-        // Copy file
-        bytes_written += io::copy(&mut self.inner_file, writer).await? as usize;
-
-        // Reset file back to start position
-        self.inner_file.seek(SeekFrom::Start(0)).await?;
-        self.curr_pos = 0;
-
-        Ok(bytes_written)
+        self.index_reader.write_to(writer).await
     }
 }

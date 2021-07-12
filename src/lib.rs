@@ -1,9 +1,9 @@
 //!A simple library to index and read large files by its lines.
 
+pub mod bufreader;
 pub mod error;
 pub mod file;
 pub mod index;
-pub mod shared_file;
 
 use async_std::io::Write;
 pub use file::File;

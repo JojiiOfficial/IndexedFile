@@ -1,5 +1,4 @@
 use async_std::{
-    fs,
     io::{prelude::*, BufReader, Read},
     stream::StreamExt,
 };
@@ -56,7 +55,6 @@ impl Index {
     pub fn encode(&self) -> Vec<u8> {
         let mut out = self.inner.iter().map(|i| format!("{}", i)).join(",");
         out.push('\n');
-
         out.as_bytes().to_vec()
     }
 
@@ -83,7 +81,7 @@ impl Index {
     }
 
     /// Parse an index from a reader.
-    pub(super) async fn parse_index(reader: &mut BufReader<fs::File>) -> Result<Index> {
+    pub(super) async fn parse_index<R: Read + Unpin>(reader: &mut BufReader<R>) -> Result<Index> {
         let mut first_line = Vec::new();
         reader.read_until(b'\n', &mut first_line).await?;
 
