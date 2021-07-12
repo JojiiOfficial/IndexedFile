@@ -1,6 +1,6 @@
 //! Index a normal text file and read a given line directly
 
-use indexed_file::ReadByLine;
+use indexed_file::{IndexableFile, ReadByLine};
 
 #[async_std::main]
 async fn main() {
@@ -10,8 +10,8 @@ async fn main() {
         .unwrap();
 
     // Get line count efficiently without reading the entire file
-    let line_count = file.total_lines();
+    let _line_count = file.total_lines();
 
     // Read line 30
-    let line_30 = file.read_line(30).await.unwrap();
+    let _line_30 = file.read_line(30).await.unwrap();
 }

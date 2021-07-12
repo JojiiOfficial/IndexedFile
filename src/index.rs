@@ -1,4 +1,5 @@
 use async_std::{
+    fs,
     io::{prelude::*, BufReader, Read},
     stream::StreamExt,
 };
@@ -79,5 +80,20 @@ impl Index {
     /// Returns `true` if the index is empty
     pub fn is_empty(&self) -> bool {
         self.len_bytes() == 0
+    }
+
+    /// Parse an index from a reader.
+    pub(super) async fn parse_index(reader: &mut BufReader<fs::File>) -> Result<Index> {
+        let mut first_line = Vec::new();
+        reader.read_until(b'\n', &mut first_line).await?;
+
+        if first_line.len() <= 1 {
+            return Err(Error::MissingIndex);
+        }
+
+        // Remove last '\n'
+        first_line.pop();
+
+        Ok(Index::parse(&first_line)?)
     }
 }

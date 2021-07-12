@@ -1,5 +1,7 @@
 //! Convert a normal to an indexed file
 
+use indexed_file::IndexableFile;
+
 #[async_std::main]
 async fn main() {
     // Open and index file
@@ -15,5 +17,5 @@ async fn main() {
 
     // Now we don't need to build the index each time we open the file but can use `File::open`
     // which will load the stored index
-    let file = indexed_file::File::open("output").await.unwrap();
+    let _file = indexed_file::File::open("output").await.unwrap();
 }
