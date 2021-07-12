@@ -5,7 +5,7 @@ use async_std::io::BufReader;
 use async_std::stream::StreamExt;
 use criterion::async_executor::AsyncStdExecutor;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use indexed_file::{File, ReadByLine};
+use indexed_file::{File, Indexable, ReadByLine};
 use rand::distributions::Uniform;
 use rand::Rng;
 

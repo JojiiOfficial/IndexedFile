@@ -60,16 +60,41 @@ impl File {
     }
 }
 
-#[async_trait]
-impl IndexableFile for File {
+impl Indexable for File {
     #[inline]
     fn get_index(&self) -> &Index {
         &self.index
     }
+}
 
-    #[inline]
-    fn total_lines(&self) -> usize {
-        self.index.len()
+#[async_trait]
+impl IndexableFile for File {
+    #[inline(always)]
+    async fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+        let res = self.inner_file.read_until(b'\n', buf).await?;
+
+        // Pop last \n if existing
+        if res > 0 && *buf.last().unwrap() == b'\n' {
+            buf.pop();
+        }
+
+        Ok(res)
+    }
+
+    #[inline(always)]
+    async fn seek_line(&mut self, line: usize) -> Result<u64> {
+        // We don't need to seek if we're sequencially reading the file, aka. if
+        // line == last_line + 1
+        if let Some(last_line) = self.last_line {
+            if line == last_line + 1 {
+                self.last_line = Some(line);
+                return Ok(0);
+            }
+        }
+
+        self.last_line = Some(line);
+        let seek_pos = self.get_offset(line)?;
+        Ok(self.inner_file.seek(SeekFrom::Start(seek_pos)).await?)
     }
 
     async fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
@@ -87,45 +112,5 @@ impl IndexableFile for File {
         bytes_written += io::copy(&mut self.inner_file, writer).await? as usize;
 
         Ok(bytes_written)
-    }
-}
-
-#[async_trait]
-impl Indexable for File {
-    #[inline(always)]
-    fn get_offset(&self, line: usize) -> Result<u64> {
-        self.get_index()
-            .get(line)
-            // The indexed value represents the position of the line in the original file. We need
-            // to add the amount of bytes of the index to the seek position.
-            .map(|i| i + (self.index.len_bytes() as u64))
-    }
-
-    #[inline(always)]
-    async fn seek(&mut self, line: usize) -> Result<u64> {
-        // We don't need to seek if we're sequencially reading the file, aka. if
-        // line == last_line + 1
-        if let Some(last_line) = self.last_line {
-            if line == last_line + 1 {
-                self.last_line = Some(line);
-                return Ok(0);
-            }
-        }
-
-        self.last_line = Some(line);
-        let seek_pos = self.get_offset(line)?;
-        Ok(self.inner_file.seek(SeekFrom::Start(seek_pos)).await?)
-    }
-
-    #[inline(always)]
-    async fn read_to_eol(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        let res = self.inner_file.read_until(b'\n', buf).await?;
-
-        // Pop last \n if existing
-        if res > 0 && *buf.last().unwrap() == b'\n' {
-            buf.pop();
-        }
-
-        Ok(res)
     }
 }

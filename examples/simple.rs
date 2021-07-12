@@ -1,6 +1,6 @@
 //! Index a normal text file and read a given line directly
 
-use indexed_file::{IndexableFile, ReadByLine};
+use indexed_file::{Indexable, ReadByLine};
 
 #[async_std::main]
 async fn main() {

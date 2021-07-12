@@ -12,53 +12,65 @@ use index::Index;
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 
-#[async_trait]
-pub trait IndexableFile {
+pub trait Indexable {
     /// Returns a reference to the files index.
     fn get_index(&self) -> &Index;
 
     /// Returns the total amount of lines in the file without the lines used by the index.
-    fn total_lines(&self) -> usize;
+    #[inline]
+    fn total_lines(&self) -> usize {
+        self.get_index().len()
+    }
+
+    #[inline]
+    fn get_index_byte_len(&self) -> usize {
+        self.get_index().len_bytes()
+    }
+}
+
+#[async_trait]
+pub trait IndexableFile: Indexable {
+    /// Should read from the current position until the end of the line, omitting the \n
+    async fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize>;
+
+    /// Should seek the file to the given line `line`
+    async fn seek_line(&mut self, line: usize) -> Result<u64>;
 
     /// Write the index, followed by the files contents into `writer`. A file generated using this
     /// function will always be parsable by `File::open`.
     async fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize>;
-}
 
-/// A trait defining certain seeking behavior which is required for `ReadByLine`. ReadByLine is
-/// automatically implemented for types implementing `Indexable`
-#[async_trait]
-pub trait Indexable: IndexableFile {
     /// Should return the offset to seek to given the line-index
-    fn get_offset(&self, line: usize) -> Result<u64>;
-
-    /// Should seek to the reader used in `read_to_eol` to the given `SeekFrom`
-    async fn seek(&mut self, line: usize) -> Result<u64>;
-
-    /// Should read from the current position until the end of the line, omitting the \n
-    async fn read_to_eol(&mut self, buf: &mut Vec<u8>) -> Result<usize>;
+    #[inline(always)]
+    fn get_offset(&self, line: usize) -> Result<u64> {
+        self.get_index()
+            .get(line)
+            // The indexed value represents the position of the line in the original file. We need
+            // to add the amount of bytes of the index to the seek position.
+            .map(|i| i + (self.get_index_byte_len() as u64))
+    }
 }
 
 /// A trait defining behavior for reading certain lines directly from indexed files.
 #[async_trait]
-pub trait ReadByLine: Indexable {
+pub trait ReadByLine: IndexableFile {
     /// Reads the given line
     async fn read_line(&mut self, line: usize) -> Result<String> {
-        self.seek(line).await?;
+        self.seek_line(line).await?;
 
         let mut read_data = Vec::new();
-        self.read_to_eol(&mut read_data).await?;
+        self.read_current_line(&mut read_data).await?;
         Ok(String::from_utf8(read_data)?)
     }
 
     /// Reads the given line and stores into `buf`
     async fn read_line_raw(&mut self, line: usize, buf: &mut Vec<u8>) -> Result<usize> {
-        self.seek(line).await?;
-        Ok(self.read_to_eol(buf).await?)
+        self.seek_line(line).await?;
+        Ok(self.read_current_line(buf).await?)
     }
 }
 
-impl<T: Indexable> ReadByLine for T {}
+impl<T: IndexableFile> ReadByLine for T {}
 
 #[cfg(test)]
 mod tests {
