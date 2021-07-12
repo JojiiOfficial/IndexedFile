@@ -1,3 +1,5 @@
+use std::io::SeekFrom;
+
 use async_std::{
     io::{prelude::*, BufReader, Read},
     stream::StreamExt,
@@ -32,7 +34,7 @@ impl Index {
 
     /// Build a new index for UTF8-text within `reader`. Returns a `Vec<u8>` holding the bytes representing
     /// the index in encoded format. This is usually needed for building an indexed file.
-    pub async fn build<R: Read + Unpin>(reader: &mut BufReader<R>) -> Result<Self> {
+    pub async fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
         let mut lines = reader.lines();
 
         let mut line_index: Vec<u64> = Vec::new();
@@ -44,6 +46,9 @@ impl Index {
             // Calculate offset of next line. We have to do +1 since we're omitting the \n
             curr_offset += line?.len() as u64 + 1;
         }
+
+        // Reset reader
+        reader.seek(SeekFrom::Start(0)).await?;
 
         Ok(Self {
             inner: line_index,
