@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod file;
+pub mod shared_file;
 pub mod index;
 
 use async_std::io::Write;

@@ -5,7 +5,7 @@ A library to read lines of a file directly without having to read more than the 
 
 ### Non indexed files
 ```rust
-use indexed_file::ReadByLine;
+use indexed_file::{Indexable, ReadByLine};
 
 #[async_std::main]
 async fn main() {
@@ -24,7 +24,7 @@ async fn main() {
 
 ### Indexed files
 ```rust
-use indexed_file::ReadByLine;
+use indexed_file::{Indexable, ReadByLine};
 
 #[async_std::main]
 async fn main() {
