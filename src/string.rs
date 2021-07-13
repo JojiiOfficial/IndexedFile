@@ -12,6 +12,7 @@ use crate::{index::Index, Indexable, IndexableFile, Result};
 /// lines.
 #[derive(Debug)]
 pub struct IndexedString<'a> {
+    data: &'a str,
     reader: IndexedBufReader<Cursor<&'a str>>,
 }
 
@@ -22,29 +23,30 @@ impl<'a> IndexedString<'a> {
     pub fn new(s: &'a str) -> Result<IndexedString<'a>> {
         let mut reader = BufReader::new(Cursor::new(s));
         let index = Index::parse_index(&mut reader)?;
-        Self::from_reader(reader, Arc::new(index))
+        Ok(Self::from_reader(s, reader, Arc::new(index)))
     }
 
-    /// Open a non indexed file and generates the index.
+    /// Create a new `IndexedString` from unindexed text and builds an index.
     pub fn new_raw(s: &'a str) -> Result<IndexedString<'a>> {
         let mut reader = BufReader::new(Cursor::new(s));
         let index = Index::build(&mut reader)?;
-        Self::from_reader(reader, Arc::new(index))
+        Ok(Self::from_reader(s, reader, Arc::new(index)))
     }
 
-    /// Open a non indexed file and uses a custom index `index`.
+    /// Create a new `IndexedString` from unindexed text and uses `index` as index.
     /// Expects the index to be properly built.
-    pub fn new_custom(s: &'a str, index: Arc<Index>) -> Result<IndexedString<'a>> {
+    pub fn new_custom(s: &'a str, index: Arc<Index>) -> IndexedString<'a> {
         let reader = BufReader::new(Cursor::new(s));
-        Self::from_reader(reader, index)
+        Self::from_reader(s, reader, index)
     }
 
     fn from_reader(
+        data: &'a str,
         reader: BufReader<Cursor<&'a str>>,
         index: Arc<Index>,
-    ) -> Result<IndexedString<'a>> {
-        let reader = IndexedBufReader::new(reader, index).unwrap();
-        Ok(Self { reader })
+    ) -> IndexedString<'a> {
+        let reader = IndexedBufReader::new(reader, index);
+        Self { data, reader }
     }
 }
 
@@ -68,6 +70,19 @@ impl<'a> IndexableFile for IndexedString<'a> {
 
     fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
         self.reader.write_to(writer)
+    }
+}
+
+impl<'a> Clone for IndexedString<'a> {
+    /// Does not clone the entire text but the IndexedString and the Arc reference to the index
+    fn clone(&self) -> Self {
+        let reader = self
+            .reader
+            .duplicate(BufReader::new(Cursor::new(self.data)));
+        Self {
+            data: self.data,
+            reader,
+        }
     }
 }
 

@@ -19,13 +19,24 @@ impl<R: Read + Unpin + Seek> IndexedBufReader<R> {
     /// Open a new indexed file.
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
-    pub fn new(reader: BufReader<R>, index: Arc<Index>) -> Result<IndexedBufReader<R>> {
-        Ok(Self {
+    pub fn new(reader: BufReader<R>, index: Arc<Index>) -> IndexedBufReader<R> {
+        Self {
             index,
             reader,
             last_line: None,
             curr_pos: 0,
-        })
+        }
+    }
+
+    /// Creates a new `IndexedBufReader` with the current index. `reader` should contain the same
+    /// data used in `&self` or the index might be invalid for the given reader
+    pub fn duplicate(&self, reader: BufReader<R>) -> Self {
+        Self {
+            reader,
+            index: Arc::clone(&self.index),
+            curr_pos: 0,
+            last_line: None,
+        }
     }
 }
 
@@ -37,6 +48,7 @@ impl<R: Read + Unpin + Seek> Indexable for IndexedBufReader<R> {
 }
 
 impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
+    #[inline]
     fn get_offset(&self, line: usize) -> Result<u64> {
         Ok(self.get_index().get(line)? + self.get_index_byte_len() as u64)
     }

@@ -7,7 +7,7 @@ pub mod index;
 pub mod string;
 
 pub use file::File;
-use std::io::Write;
+use std::{cmp::Ordering, io::Write};
 
 use index::Index;
 
@@ -62,6 +62,40 @@ pub trait ReadByLine: IndexableFile {
     fn read_line_raw(&mut self, line: usize, buf: &mut Vec<u8>) -> Result<usize> {
         self.seek_line(line)?;
         Ok(self.read_current_line(buf)?)
+    }
+
+    /// Do a binary search on `ReadByLine` implementing Types, since it provides everything required
+    /// for binary search
+    fn binary_search(&mut self, x: &String) -> Result<usize> {
+        self.binary_search_by(|p| p.cmp(x))
+    }
+
+    /// Do a binary search by on `ReadByLine` implementing Types, since it provides everything required
+    /// for binary search
+    fn binary_search_by<F>(&mut self, mut f: F) -> Result<usize>
+    where
+        F: FnMut(&String) -> std::cmp::Ordering,
+    {
+        let mut size = self.total_lines();
+        let mut left = 0;
+        let mut right = size;
+
+        while left < right {
+            let mid = left + size / 2;
+
+            let cmp = f(&self.read_line(mid)?);
+
+            if cmp == Ordering::Less {
+                left = mid + 1;
+            } else if cmp == Ordering::Greater {
+                right = mid;
+            } else {
+                return Ok(mid);
+            }
+
+            size = right - left;
+        }
+        Ok(left)
     }
 }
 

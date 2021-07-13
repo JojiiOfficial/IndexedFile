@@ -21,27 +21,27 @@ impl File {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<File> {
         let mut inner_file = BufReader::new(fs::File::open(path)?);
         let index = Index::parse_index(&mut inner_file)?;
-        Self::from_buf_reader(inner_file, Arc::new(index))
+        Ok(Self::from_buf_reader(inner_file, Arc::new(index)))
     }
 
     /// Open a non indexed file and generates the index.
     pub fn open_raw<P: AsRef<Path>>(path: P) -> Result<File> {
         let mut inner_file = BufReader::new(fs::File::open(path)?);
         let index = Index::build(&mut inner_file)?;
-        Self::from_buf_reader(inner_file, Arc::new(index))
+        Ok(Self::from_buf_reader(inner_file, Arc::new(index)))
     }
 
     /// Open a non indexed file and uses a custom index `index`.
     /// Expects the index to be properly built.
     pub fn open_custom<P: AsRef<Path>>(path: P, index: Arc<Index>) -> Result<File> {
         let inner_file = BufReader::new(fs::File::open(path)?);
-        Self::from_buf_reader(inner_file, index)
+        Ok(Self::from_buf_reader(inner_file, index))
     }
 
     /// Creates a new `File` using an existing `_std::io::BufReader` and index
-    pub fn from_buf_reader(reader: BufReader<fs::File>, index: Arc<Index>) -> Result<File> {
-        let index_reader = bufreader::IndexedBufReader::new(reader, index)?;
-        Ok(Self { index_reader })
+    pub fn from_buf_reader(reader: BufReader<fs::File>, index: Arc<Index>) -> File {
+        let index_reader = bufreader::IndexedBufReader::new(reader, index);
+        Self { index_reader }
     }
 }
 
