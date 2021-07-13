@@ -1,10 +1,7 @@
 use std::io::SeekFrom;
 
-use async_std::{
-    io::{prelude::*, BufReader, Read},
-    stream::StreamExt,
-};
 use itertools::Itertools;
+use std::io::{prelude::*, BufReader, Read};
 
 use crate::{error::Error, Result};
 
@@ -34,13 +31,13 @@ impl Index {
 
     /// Build a new index for UTF8-text within `reader`. Returns a `Vec<u8>` holding the bytes representing
     /// the index in encoded format. This is usually needed for building an indexed file.
-    pub async fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
+    pub fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
         let mut lines = reader.lines();
 
         let mut line_index: Vec<u64> = Vec::new();
 
         let mut curr_offset: u64 = 0;
-        while let Some(line) = lines.next().await {
+        while let Some(line) = lines.next() {
             line_index.push(curr_offset);
 
             // Calculate offset of next line. We have to do +1 since we're omitting the \n
@@ -48,7 +45,7 @@ impl Index {
         }
 
         // Reset reader
-        reader.seek(SeekFrom::Start(0)).await?;
+        reader.seek(SeekFrom::Start(0))?;
 
         Ok(Self {
             inner: line_index,
@@ -86,9 +83,9 @@ impl Index {
     }
 
     /// Parse an index from a reader.
-    pub(super) async fn parse_index<R: Read + Unpin>(reader: &mut BufReader<R>) -> Result<Index> {
+    pub(super) fn parse_index<R: Read + Unpin>(reader: &mut BufReader<R>) -> Result<Index> {
         let mut first_line = Vec::new();
-        reader.read_until(b'\n', &mut first_line).await?;
+        reader.read_until(b'\n', &mut first_line)?;
 
         if first_line.len() <= 1 {
             return Err(Error::MissingIndex);

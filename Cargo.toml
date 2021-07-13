@@ -18,13 +18,10 @@ path = "examples/index_file.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-std = { version = "1.9.0", features = ["attributes"] }
-async-trait = "0.1.50"
 itertools = "0.10.1"
 
 [dev-dependencies]
-async-std = { version = "1.9.0", features = ["attributes"] }
-criterion = { version = "0.3.4", features = ["async_std"] }
+criterion = { version = "0.3.4" }
 rand = "0.8.4"
 
 [[bench]]
