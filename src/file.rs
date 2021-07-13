@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::ReadByLine;
 use crate::{bufreader, index::Index, Indexable, IndexableFile, Result};
 
 /// A wrapper around `_std::fs::File` which implements `ReadByLine` and holds an index of the
@@ -73,3 +74,5 @@ impl IndexableFile for File {
         self.index_reader.write_to(writer)
     }
 }
+
+impl ReadByLine for File {}

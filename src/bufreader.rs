@@ -1,6 +1,6 @@
 use std::{io::SeekFrom, sync::Arc};
 
-use crate::Result;
+use crate::{ReadByLine, Result};
 use std::io::{self, prelude::*, BufReader, Read, Write};
 
 use crate::{index::Index, Indexable, IndexableFile};
@@ -37,21 +37,22 @@ impl<R: Read + Unpin + Seek> Indexable for IndexedBufReader<R> {
 }
 
 impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
-    #[inline(always)]
+    fn get_offset(&self, line: usize) -> Result<u64> {
+        Ok(self.get_index().get(line)? + self.get_index_byte_len() as u64)
+    }
+
     fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         let res = self.reader.read_until(b'\n', buf)?;
+        self.curr_pos += res as u64;
 
         // Pop last \n if existing
         if res > 0 && *buf.last().unwrap() == b'\n' {
             buf.pop();
         }
 
-        self.curr_pos += res as u64;
-
         Ok(res)
     }
 
-    #[inline(always)]
     fn seek_line(&mut self, line: usize) -> Result<()> {
         // We don't need to seek if we're sequencially reading the file, aka. if
         // line == last_line + 1
@@ -61,13 +62,17 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
                 return Ok(());
             }
         }
-
-        self.last_line = Some(line);
         let seek_pos = self.get_offset(line)?;
 
+        self.reader.seek(SeekFrom::Start(seek_pos))?;
+
+        self.last_line = Some(line);
+
+        /*
         // Calculate offset of position we want to jump to from current position
         let offset = seek_pos as i64 - self.curr_pos as i64;
         self.curr_pos = self.reader.seek(SeekFrom::Current(offset))?;
+        */
         Ok(())
     }
 
@@ -92,3 +97,5 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
         Ok(bytes_written)
     }
 }
+
+impl<R: Read + Unpin + Seek + Send> ReadByLine for IndexedBufReader<R> {}
