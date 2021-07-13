@@ -1,15 +1,9 @@
-use std::sync::Arc;
 use std::time::Instant;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use indexed_file::bufreader::IndexedBufReader;
-use indexed_file::index::Index;
-use indexed_file::string::IndexedString;
-use indexed_file::{File, Indexable, ReadByLine};
-use rand::distributions::Uniform;
-use rand::Rng;
+use indexed_file::{string::IndexedString, File, Indexable, ReadByLine};
+use rand::{distributions::Uniform, Rng};
 use std::fs;
-use std::io::{BufRead, BufReader};
 
 fn in_memory_random_lines_bench(c: &mut Criterion) {
     c.bench_function("read random lines in memory", |b| {
@@ -100,31 +94,11 @@ fn sequencial_in_memory_bench(c: &mut Criterion) {
     });
 }
 
-fn sequencial_bench_async_std(c: &mut Criterion) {
-    c.bench_function("read sequential std implementation", |b| {
-        b.iter_custom(|iters| {
-            let file = fs::File::open("./testfiles/LICENSE").unwrap();
-            let mut reader = BufReader::new(file).lines();
-
-            let start = Instant::now();
-
-            for _i in 0..iters {
-                while let Some(line) = reader.next() {
-                    let line = black_box(line.unwrap());
-                }
-            }
-
-            start.elapsed()
-        });
-    });
-}
-
 criterion_group!(
     benches,
     in_memory_random_lines_bench,
     random_lines_bench,
     sequencial_bench,
     sequencial_in_memory_bench,
-    sequencial_bench_async_std
 );
 criterion_main!(benches);

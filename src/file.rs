@@ -1,12 +1,11 @@
-use std::{fs, io::prelude::*};
 use std::{
-    io::{BufReader, SeekFrom, Write},
+    fs,
+    io::{BufReader, Write},
     path::Path,
     sync::Arc,
 };
 
-use crate::ReadByLine;
-use crate::{bufreader, index::Index, Indexable, IndexableFile, Result};
+use crate::{bufreader, index::Index, Indexable, IndexableFile, ReadByLine, Result};
 
 /// A wrapper around `_std::fs::File` which implements `ReadByLine` and holds an index of the
 /// lines.
@@ -21,20 +20,14 @@ impl File {
     /// Returns an error if the index is malformed, missing or an io error occurs
     pub fn open<P: AsRef<Path>>(path: P) -> Result<File> {
         let mut inner_file = BufReader::new(fs::File::open(path)?);
-
         let index = Index::parse_index(&mut inner_file)?;
-
         Self::from_buf_reader(inner_file, Arc::new(index))
     }
 
     /// Open a non indexed file and generates the index.
     pub fn open_raw<P: AsRef<Path>>(path: P) -> Result<File> {
         let mut inner_file = BufReader::new(fs::File::open(path)?);
-
         let index = Index::build(&mut inner_file)?;
-
-        inner_file.seek(SeekFrom::Start(0))?;
-
         Self::from_buf_reader(inner_file, Arc::new(index))
     }
 

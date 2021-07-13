@@ -83,7 +83,7 @@ impl Index {
     }
 
     /// Parse an index from a reader.
-    pub(super) fn parse_index<R: Read + Unpin>(reader: &mut BufReader<R>) -> Result<Index> {
+    pub(super) fn parse_index<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Index> {
         let mut first_line = Vec::new();
         reader.read_until(b'\n', &mut first_line)?;
 
@@ -93,6 +93,8 @@ impl Index {
 
         // Remove last '\n'
         first_line.pop();
+
+        reader.seek(SeekFrom::Start(0))?;
 
         Ok(Index::parse(&first_line)?)
     }

@@ -62,17 +62,10 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
                 return Ok(());
             }
         }
+
         let seek_pos = self.get_offset(line)?;
-
         self.reader.seek(SeekFrom::Start(seek_pos))?;
-
         self.last_line = Some(line);
-
-        /*
-        // Calculate offset of position we want to jump to from current position
-        let offset = seek_pos as i64 - self.curr_pos as i64;
-        self.curr_pos = self.reader.seek(SeekFrom::Current(offset))?;
-        */
         Ok(())
     }
 
