@@ -1,6 +1,5 @@
 use std::io::SeekFrom;
 
-use itertools::Itertools;
 use std::io::{prelude::*, BufReader, Read};
 
 use crate::{error::Error, Result};
@@ -55,7 +54,16 @@ impl Index {
 
     /// Encodes an index into bytes, which can be used to store it into a file.
     pub fn encode(&self) -> Vec<u8> {
-        let mut out = self.inner.iter().map(|i| format!("{}", i)).join(",");
+        let mut out = String::new();
+        for (pos, i) in self.inner.iter().enumerate() {
+            out.push_str(&i.to_string());
+
+            // skip last ,
+            if pos + 1 < self.inner.len() {
+                out.push(',');
+            }
+        }
+
         out.push('\n');
         out.as_bytes().to_vec()
     }

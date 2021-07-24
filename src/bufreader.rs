@@ -19,6 +19,7 @@ impl<R: Read + Unpin + Seek> IndexedBufReader<R> {
     /// Open a new indexed file.
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
+    #[inline(always)]
     pub fn new(reader: BufReader<R>, index: Arc<Index>) -> IndexedBufReader<R> {
         Self {
             index,
@@ -30,13 +31,9 @@ impl<R: Read + Unpin + Seek> IndexedBufReader<R> {
 
     /// Creates a new `IndexedBufReader` with the current index. `reader` should contain the same
     /// data used in `&self` or the index might be invalid for the given reader
+    #[inline(always)]
     pub fn duplicate(&self, reader: BufReader<R>) -> Self {
-        Self {
-            reader,
-            index: Arc::clone(&self.index),
-            curr_pos: 0,
-            last_line: None,
-        }
+        Self::new(reader, Arc::clone(&self.index))
     }
 }
 

@@ -10,6 +10,7 @@ pub enum Error {
     /// On reqest for a non existing index entry
     OutOfBounds,
     UTF8Error,
+    NotFound,
 }
 
 impl From<FromUtf8Error> for Error {

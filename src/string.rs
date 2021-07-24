@@ -8,56 +8,78 @@ use crate::bufreader::IndexedBufReader;
 use crate::ReadByLine;
 use crate::{index::Index, Indexable, IndexableFile, Result};
 
-/// A wrapper around `_std::fs::File` which implements `ReadByLine` and holds an index of the
+/// A wrapper around `String` which implements `ReadByLine` and holds an index of the
 /// lines.
 #[derive(Debug)]
-pub struct IndexedString<'a> {
-    data: &'a str,
-    reader: IndexedBufReader<Cursor<&'a str>>,
+pub struct IndexedString {
+    // requried to allow duplicating the IndexedString
+    data: ArcString,
+    reader: IndexedBufReader<Cursor<ArcString>>,
 }
 
-impl<'a> IndexedString<'a> {
+#[derive(Debug, Clone)]
+pub struct ArcString(Arc<String>);
+
+impl AsRef<[u8]> for ArcString {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl<T: ToString> From<T> for ArcString {
+    fn from(s: T) -> Self {
+        Self(Arc::new(s.to_string()))
+    }
+}
+
+impl IndexedString {
     /// Read a string with existing index into ram
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
-    pub fn new(s: &'a str) -> Result<IndexedString<'a>> {
-        let mut reader = BufReader::new(Cursor::new(s));
+    pub fn new<T: Into<ArcString>>(s: T) -> Result<IndexedString> {
+        let arc = s.into();
+        let mut reader = BufReader::new(Cursor::new(arc.clone()));
+
         let index = Index::parse_index(&mut reader)?;
-        Ok(Self::from_reader(s, reader, Arc::new(index)))
+        Ok(Self::from_reader(arc, reader, Arc::new(index)))
     }
 
     /// Create a new `IndexedString` from unindexed text and builds an index.
-    pub fn new_raw(s: &'a str) -> Result<IndexedString<'a>> {
-        let mut reader = BufReader::new(Cursor::new(s));
+    pub fn new_raw<T: Into<ArcString>>(s: T) -> Result<IndexedString> {
+        let arc = s.into();
+        let mut reader = BufReader::new(Cursor::new(arc.clone()));
+
         let index = Index::build(&mut reader)?;
-        Ok(Self::from_reader(s, reader, Arc::new(index)))
+        Ok(Self::from_reader(arc, reader, Arc::new(index)))
     }
 
     /// Create a new `IndexedString` from unindexed text and uses `index` as index.
     /// Expects the index to be properly built.
-    pub fn new_custom(s: &'a str, index: Arc<Index>) -> IndexedString<'a> {
-        let reader = BufReader::new(Cursor::new(s));
-        Self::from_reader(s, reader, index)
+    pub fn new_custom<T: Into<ArcString>>(s: T, index: Arc<Index>) -> IndexedString {
+        let arc = s.into();
+        let reader = BufReader::new(Cursor::new(arc.clone()));
+        let reader = IndexedBufReader::new(reader, index);
+        Self { data: arc, reader }
     }
 
     fn from_reader(
-        data: &'a str,
-        reader: BufReader<Cursor<&'a str>>,
+        data: ArcString,
+        reader: BufReader<Cursor<ArcString>>,
         index: Arc<Index>,
-    ) -> IndexedString<'a> {
+    ) -> IndexedString {
         let reader = IndexedBufReader::new(reader, index);
         Self { data, reader }
     }
 }
 
-impl<'a> Indexable for IndexedString<'a> {
+impl Indexable for IndexedString {
     #[inline]
     fn get_index(&self) -> &Index {
         &self.reader.index
     }
 }
 
-impl<'a> IndexableFile for IndexedString<'a> {
+impl IndexableFile for IndexedString {
     #[inline(always)]
     fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         self.reader.read_current_line(buf)
@@ -68,22 +90,24 @@ impl<'a> IndexableFile for IndexedString<'a> {
         self.reader.seek_line(line)
     }
 
+    #[inline(always)]
     fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
         self.reader.write_to(writer)
     }
 }
 
-impl<'a> Clone for IndexedString<'a> {
+impl Clone for IndexedString {
     /// Does not clone the entire text but the IndexedString and the Arc reference to the index
+    #[inline(always)]
     fn clone(&self) -> Self {
-        let reader = self
-            .reader
-            .duplicate(BufReader::new(Cursor::new(self.data)));
+        let new_arc = self.data.clone();
         Self {
-            data: self.data,
-            reader,
+            reader: self
+                .reader
+                .duplicate(BufReader::with_capacity(1, Cursor::new(new_arc.clone()))),
+            data: new_arc,
         }
     }
 }
 
-impl<'a> ReadByLine for IndexedString<'a> {}
+impl ReadByLine for IndexedString {}

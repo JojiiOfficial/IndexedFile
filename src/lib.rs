@@ -66,7 +66,7 @@ pub trait ReadByLine: IndexableFile {
 
     /// Do a binary search on `ReadByLine` implementing Types, since it provides everything required
     /// for binary search
-    fn binary_search(&mut self, x: &String) -> Result<usize> {
+    fn binary_search(&mut self, x: &str) -> Result<usize> {
         self.binary_search_by(|p| p.cmp(x))
     }
 
@@ -74,7 +74,7 @@ pub trait ReadByLine: IndexableFile {
     /// for binary search
     fn binary_search_by<F>(&mut self, mut f: F) -> Result<usize>
     where
-        F: FnMut(&String) -> std::cmp::Ordering,
+        F: FnMut(&str) -> std::cmp::Ordering,
     {
         let mut size = self.total_lines();
         let mut left = 0;
@@ -95,7 +95,8 @@ pub trait ReadByLine: IndexableFile {
 
             size = right - left;
         }
-        Ok(left)
+
+        Err(error::Error::NotFound)
     }
 }
 
