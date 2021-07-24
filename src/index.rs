@@ -43,8 +43,8 @@ impl Index {
             curr_offset += line?.len() as u64 + 1;
         }
 
-        // Reset reader
-        reader.seek(SeekFrom::Start(0))?;
+        // Seeking to 0 doesn't throw an error so we can unwrap it
+        reader.seek(SeekFrom::Start(0)).unwrap();
 
         Ok(Self {
             inner: line_index,

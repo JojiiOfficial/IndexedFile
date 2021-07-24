@@ -45,12 +45,16 @@ impl IndexedString {
     }
 
     /// Create a new `IndexedString` from unindexed text and builds an index.
-    pub fn new_raw<T: Into<ArcString>>(s: T) -> Result<IndexedString> {
+    pub fn new_raw<T: Into<ArcString>>(s: T) -> IndexedString {
         let arc = s.into();
         let mut reader = BufReader::new(Cursor::new(arc.clone()));
 
-        let index = Index::build(&mut reader)?;
-        Ok(Self::from_reader(arc, reader, Arc::new(index)))
+        // Safety: We can unwrap here since passing a string already enforces the string to be valid UTF-8
+        // which is the only possible error that can be thrown using a BufReader<Cursor<String>> as
+        // reader
+        let index = Index::build(&mut reader).unwrap();
+
+        Self::from_reader(arc, reader, Arc::new(index))
     }
 
     /// Create a new `IndexedString` from unindexed text and uses `index` as index.
@@ -58,8 +62,7 @@ impl IndexedString {
     pub fn new_custom<T: Into<ArcString>>(s: T, index: Arc<Index>) -> IndexedString {
         let arc = s.into();
         let reader = BufReader::new(Cursor::new(arc.clone()));
-        let reader = IndexedBufReader::new(reader, index);
-        Self { data: arc, reader }
+        Self::from_reader(arc, reader, index)
     }
 
     fn from_reader(
