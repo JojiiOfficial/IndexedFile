@@ -1,16 +1,23 @@
-//!A simple library to index and read large files by its lines.
+//!A simple library to index and read large files by its lines using a pregenerated index
 
+/// Generic implementation to use various types as reader
+pub mod any;
+/// Basic implementation for std::io::BufReader
 pub mod bufreader;
 pub mod error;
+/// A wrapper around std::fs::File which implements ReadByLine
 pub mod file;
+/// The index of files
 pub mod index;
+/// An indexed string reader
 pub mod string;
 
 pub use file::File;
+pub use string::IndexedString;
+
 use std::{cmp::Ordering, io::Write};
 
 use index::Index;
-
 pub type Result<T> = std::result::Result<T, error::Error>;
 
 pub trait Indexable {
@@ -65,13 +72,14 @@ pub trait ReadByLine: IndexableFile {
     }
 
     /// Do a binary search on `ReadByLine` implementing Types, since it provides everything required
-    /// for binary search
+    /// for binary search. Only works with sorted files
+    #[inline]
     fn binary_search(&mut self, x: &str) -> Result<usize> {
         self.binary_search_by(|p| p.cmp(x))
     }
 
     /// Do a binary search by on `ReadByLine` implementing Types, since it provides everything required
-    /// for binary search
+    /// for binary search. Only works with sorted files
     fn binary_search_by<F>(&mut self, mut f: F) -> Result<usize>
     where
         F: FnMut(&str) -> std::cmp::Ordering,
@@ -108,6 +116,7 @@ mod tests {
 
     use super::*;
     use std::{
+        convert::TryInto,
         fs::read_to_string,
         io::{prelude::*, BufReader},
     };
@@ -127,16 +136,28 @@ mod tests {
 
             // Test File
             let mut indexed_file = File::open_raw(&file).expect("failed opening indexed file");
-            test_sequencially(&mut indexed_file, &file);
-            test_random(&mut indexed_file, &file);
+            test_reader(&mut indexed_file, &file);
+            assert_eq!(
+                indexed_file.read_all().unwrap(),
+                read_to_string(&file).unwrap()
+            );
 
             // Test IndexedString
             let file_content = read_to_string(&file).unwrap();
-            let mut indexed_string =
-                IndexedString::new_raw(&file_content).expect("failed opening indexed file");
-            test_sequencially(&mut indexed_string, &file);
-            test_random(&mut indexed_string, &file);
+            let mut indexed_string = IndexedString::new_raw(file_content).unwrap();
+            test_reader(&mut indexed_string, &file);
+
+            // Test File to indexed string
+            let indexed_file = File::open_raw(&file).expect("failed opening indexed file");
+            let indexed_str_file: Result<IndexedString> = indexed_file.try_into();
+            assert!(indexed_str_file.is_ok());
+            test_reader(&mut indexed_str_file.unwrap(), &file);
         }
+    }
+
+    fn test_reader<L: ReadByLine>(reader: &mut L, original_file: &str) {
+        test_sequencially(reader, &original_file);
+        test_random(reader, &original_file);
     }
 
     fn test_sequencially<L: ReadByLine>(reader: &mut L, original_file: &str) {

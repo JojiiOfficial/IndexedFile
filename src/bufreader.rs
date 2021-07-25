@@ -5,20 +5,20 @@ use std::io::{self, prelude::*, BufReader, Read, Write};
 
 use crate::{index::Index, Indexable, IndexableFile};
 
-/// A wrapper around `std::fs::File` which implements `ReadByLine` and holds an index of the
+/// A wrapper around `BufReader<R>` which implements `ReadByLine` and holds an index of the
 /// lines.
 #[derive(Debug)]
-pub struct IndexedBufReader<R: Read + Unpin + Seek> {
+pub struct IndexedBufReader<R: Read + Unpin + Seek + Send> {
     pub reader: BufReader<R>,
     pub(crate) index: Arc<Index>,
     pub(crate) last_line: Option<usize>,
     pub(crate) curr_pos: u64,
 }
 
-impl<R: Read + Unpin + Seek> IndexedBufReader<R> {
-    /// Open a new indexed file.
-    ///
-    /// Returns an error if the index is malformed, missing or an io error occurs
+impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
+    /// Creates a new `IndexedBufReader` using a BufReader<R> and an index. The index won't be
+    /// validated. Using a malformed index won't return an error but make the IndexedBufReader
+    /// useless.
     #[inline(always)]
     pub fn new(reader: BufReader<R>, index: Arc<Index>) -> IndexedBufReader<R> {
         Self {
@@ -35,9 +35,21 @@ impl<R: Read + Unpin + Seek> IndexedBufReader<R> {
     pub fn duplicate(&self, reader: BufReader<R>) -> Self {
         Self::new(reader, Arc::clone(&self.index))
     }
+
+    /// Read the `IndexedBufReader` into a newly allocated string
+    pub fn read_all(&mut self) -> Result<String> {
+        let mut out = String::new();
+
+        for line in 0..self.total_lines() {
+            out.push_str(&self.read_line(line)?);
+            out.push('\n');
+        }
+
+        Ok(out)
+    }
 }
 
-impl<R: Read + Unpin + Seek> Indexable for IndexedBufReader<R> {
+impl<R: Read + Unpin + Seek + Send> Indexable for IndexedBufReader<R> {
     #[inline]
     fn get_index(&self) -> &Index {
         &self.index

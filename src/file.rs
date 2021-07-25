@@ -1,18 +1,19 @@
 use std::{
+    convert::TryInto,
     fs,
     io::{BufReader, Write},
     path::Path,
     sync::Arc,
 };
 
-use crate::{bufreader, index::Index, Indexable, IndexableFile, ReadByLine, Result};
+use crate::{
+    bufreader, index::Index, string::IndexedString, Indexable, IndexableFile, ReadByLine, Result,
+};
 
-/// A wrapper around `_std::fs::File` which implements `ReadByLine` and holds an index of the
+/// A wrapper around `std::fs::File` which implements `ReadByLine` and holds an index of the
 /// lines.
 #[derive(Debug)]
-pub struct File {
-    index_reader: bufreader::IndexedBufReader<fs::File>,
-}
+pub struct File(bufreader::IndexedBufReader<fs::File>);
 
 impl File {
     /// Open a new indexed file.
@@ -41,30 +42,47 @@ impl File {
     /// Creates a new `File` using an existing `_std::io::BufReader` and index
     pub fn from_buf_reader(reader: BufReader<fs::File>, index: Arc<Index>) -> File {
         let index_reader = bufreader::IndexedBufReader::new(reader, index);
-        Self { index_reader }
+        Self(index_reader)
+    }
+
+    /// Read the whole file into a String
+    pub fn read_all(&mut self) -> Result<String> {
+        self.0.read_all()
+    }
+}
+
+impl TryInto<IndexedString> for File {
+    type Error = crate::error::Error;
+
+    /// Convert a file into an IndexedString using the files index and reading the files contents
+    /// into the memory
+    fn try_into(self) -> Result<IndexedString> {
+        let mut reader = self.0;
+        let content = reader.read_all()?;
+        Ok(IndexedString::new_custom(content, reader.index))
     }
 }
 
 impl Indexable for File {
     #[inline]
     fn get_index(&self) -> &Index {
-        &self.index_reader.index
+        &self.0.index
     }
 }
 
 impl IndexableFile for File {
     #[inline(always)]
     fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        self.index_reader.read_current_line(buf)
+        self.0.read_current_line(buf)
     }
 
     #[inline(always)]
     fn seek_line(&mut self, line: usize) -> Result<()> {
-        self.index_reader.seek_line(line)
+        self.0.seek_line(line)
     }
 
     fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
-        self.index_reader.write_to(writer)
+        self.0.write_to(writer)
     }
 }
 
