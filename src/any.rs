@@ -37,6 +37,12 @@ impl<T: Anyable> From<T> for ArcAny<T> {
     }
 }
 
+impl From<&str> for ArcAny<String> {
+    fn from(s: &str) -> Self {
+        Self(Arc::new(s.to_owned()))
+    }
+}
+
 impl<T: Anyable> From<&T> for ArcAny<T> {
     fn from(s: &T) -> Self {
         Self(Arc::new(s.to_owned()))

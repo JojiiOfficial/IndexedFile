@@ -5,7 +5,7 @@ use std::io::{prelude::*, BufReader, Read};
 use crate::{error::Error, Result};
 
 /// Contains an in-memory line-index
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Index {
     /// Maps line to seek position in order to seek efficiently. The index within the Vec represents
     /// the line-index in the file
@@ -28,6 +28,7 @@ impl Index {
         Ok(Self { inner, len_bytes })
     }
 
+    /*
     /// Build a new index for UTF8-text within `reader`. Returns a `Vec<u8>` holding the bytes representing
     /// the index in encoded format. This is usually needed for building an indexed file.
     pub fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
@@ -41,6 +42,44 @@ impl Index {
 
             // Calculate offset of next line. We have to do +1 since we're omitting the \n
             curr_offset += line?.len() as u64 + 1;
+        }
+
+        // Seeking to 0 doesn't throw an error so we can unwrap it
+        reader.seek(SeekFrom::Start(0)).unwrap();
+
+        Ok(Self {
+            inner: line_index,
+            len_bytes: 0,
+        })
+    }
+    */
+
+    /// Build a new index for text within `reader`. Returns a `Vec<u8>` holding the bytes representing
+    /// the index in encoded format. This is usually needed for building an indexed file.
+    pub fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
+        // Seeking to 0 doesn't throw an error so we can unwrap it
+        reader.seek(SeekFrom::Start(0)).unwrap();
+
+        let mut line_index: Vec<u64> = Vec::new();
+        let mut curr_offset: u64 = 0;
+
+        let mut buff = Vec::with_capacity(1000);
+
+        loop {
+            let last_offset = curr_offset;
+
+            buff.clear();
+            let n = reader.read_until(b'\n', &mut buff)?;
+
+            if n == 0 || buff.is_empty() {
+                break;
+            }
+
+            // We don't want to push the last line-index twice which we would if this was at the
+            // top of the loop
+            line_index.push(last_offset);
+
+            curr_offset += n as u64;
         }
 
         // Seeking to 0 doesn't throw an error so we can unwrap it

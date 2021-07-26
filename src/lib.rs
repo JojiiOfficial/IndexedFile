@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let input_files = &["input1", "LICENSE"];
+        let input_files = &["simple", "LICENSE", "input1"];
 
         for input_file in input_files {
             let file = format!("./testfiles/{}", input_file);
