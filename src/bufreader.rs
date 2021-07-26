@@ -62,16 +62,32 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
         Ok(self.get_index().get(line)? + self.get_index_byte_len() as u64)
     }
 
-    fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        let res = self.reader.read_until(b'\n', buf)?;
-        self.curr_pos += res as u64;
+    fn read_current_line(&mut self, out_buf: &mut Vec<u8>, line: usize) -> Result<usize> {
+        let index = self.get_index();
+        let curr_line = index.get(line)?;
 
-        // Pop last \n if existing
-        if res > 0 && *buf.last().unwrap() == b'\n' {
-            buf.pop();
+        // Get space between current start index and next lines start index. The result is the
+        // amount of bytes we have to read.
+        let need_read = index.get(line + 1).map(|i| (i - curr_line) as usize).ok();
+
+        if let Some(need_read) = need_read {
+            // If out_buf is empty, we can directly write into it
+            if out_buf.len() == 0 {
+                out_buf.resize(need_read, 0);
+                self.reader.read_exact(out_buf)?;
+            } else {
+                let mut b = vec![0; need_read];
+                self.reader.read_exact(&mut b)?;
+                out_buf.extend(b);
+            }
+
+            out_buf.pop();
+            return Ok(need_read - 1);
         }
 
-        Ok(res)
+        self.reader.read_to_end(out_buf)?;
+        out_buf.pop();
+        Ok(0)
     }
 
     fn seek_line(&mut self, line: usize) -> Result<()> {

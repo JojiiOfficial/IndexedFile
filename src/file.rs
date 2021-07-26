@@ -41,12 +41,13 @@ impl File {
     }
 
     /// Creates a new `File` using an existing `_std::io::BufReader` and index
+    #[inline(always)]
     pub fn from_buf_reader(reader: BufReader<fs::File>, index: Arc<Index>) -> File {
-        let index_reader = bufreader::IndexedBufReader::new(reader, index);
-        Self(index_reader)
+        Self(bufreader::IndexedBufReader::new(reader, index))
     }
 
     /// Read the whole file into a String
+    #[inline(always)]
     pub fn read_all(&mut self) -> Result<String> {
         self.0.read_all()
     }
@@ -95,8 +96,8 @@ impl Indexable for File {
 
 impl IndexableFile for File {
     #[inline(always)]
-    fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        self.0.read_current_line(buf)
+    fn read_current_line(&mut self, buf: &mut Vec<u8>, line: usize) -> Result<usize> {
+        self.0.read_current_line(buf, line)
     }
 
     #[inline(always)]

@@ -98,8 +98,8 @@ impl<T: Anyable> Indexable for IndexedReader<T> {
 
 impl<T: Anyable> IndexableFile for IndexedReader<T> {
     #[inline(always)]
-    fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        self.reader.read_current_line(buf)
+    fn read_current_line(&mut self, buf: &mut Vec<u8>, line: usize) -> Result<usize> {
+        self.reader.read_current_line(buf, line)
     }
 
     #[inline(always)]

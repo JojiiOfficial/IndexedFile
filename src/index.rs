@@ -47,6 +47,14 @@ pub struct Index {
 }
 
 impl Index {
+    /// Create a new Index
+    pub fn new(line: Vec<u64>) -> Index {
+        Self {
+            len_bytes: HEADER_SIZE + line.len() * 8 + 1,
+            inner: line,
+        }
+    }
+
     /// Build a new index for text within `reader`. Returns a `Vec<u8>` holding the bytes representing
     /// the index in encoded format. This is usually needed for building an indexed file.
     pub fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
@@ -107,9 +115,6 @@ impl Index {
         // List of the beginning offset of each line in the file
         let mut inner: Vec<u64> = Vec::new();
 
-        // Total length until the 'real' data begins
-        let len_bytes = (header.lines * 8) + HEADER_SIZE + 1;
-
         // Decode line indices
         let mut buff: [u8; 8] = [0; 8];
         for _ in 0..header.lines {
@@ -119,7 +124,7 @@ impl Index {
             ));
         }
 
-        Ok(Self { inner, len_bytes })
+        Ok(Index::new(inner))
     }
 
     /// Converts an Index to an index with zero length

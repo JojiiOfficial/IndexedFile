@@ -38,7 +38,7 @@ pub trait Indexable {
 
 pub trait IndexableFile: Indexable {
     /// Should read from the current position until the end of the line, omitting the \n
-    fn read_current_line(&mut self, buf: &mut Vec<u8>) -> Result<usize>;
+    fn read_current_line(&mut self, buf: &mut Vec<u8>, line: usize) -> Result<usize>;
 
     /// Should seek the file to the given line `line`
     fn seek_line(&mut self, line: usize) -> Result<()>;
@@ -59,16 +59,15 @@ pub trait ReadByLine: IndexableFile {
     /// Reads the given line
     fn read_line(&mut self, line: usize) -> Result<String> {
         self.seek_line(line)?;
-
         let mut read_data = Vec::new();
-        self.read_current_line(&mut read_data)?;
+        self.read_current_line(&mut read_data, line)?;
         Ok(String::from_utf8(read_data)?)
     }
 
     /// Reads the given line and stores into `buf`
     fn read_line_raw(&mut self, line: usize, buf: &mut Vec<u8>) -> Result<usize> {
         self.seek_line(line)?;
-        Ok(self.read_current_line(buf)?)
+        Ok(self.read_current_line(buf, line)?)
     }
 
     /// Do a binary search on `ReadByLine` implementing Types, since it provides everything required
