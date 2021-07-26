@@ -112,7 +112,7 @@ pub trait ReadByLine: IndexableFile {
 mod tests {
     use rand::{distributions::Uniform, Rng};
 
-    use crate::string::IndexedString;
+    use crate::{any::IndexedReader, string::IndexedString};
 
     use super::*;
     use std::{
@@ -150,6 +150,12 @@ mod tests {
             // Test File to indexed string
             let indexed_file = File::open_raw(&file).expect("failed opening indexed file");
             let indexed_str_file: Result<IndexedString> = indexed_file.try_into();
+            assert!(indexed_str_file.is_ok());
+            test_reader(&mut indexed_str_file.unwrap(), &file);
+
+            // Test File to indexed Vec<u8>
+            let indexed_file = File::open_raw(&file).expect("failed opening indexed file");
+            let indexed_str_file: Result<IndexedReader<Vec<u8>>> = indexed_file.try_into();
             assert!(indexed_str_file.is_ok());
             test_reader(&mut indexed_str_file.unwrap(), &file);
         }

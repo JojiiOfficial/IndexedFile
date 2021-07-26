@@ -91,12 +91,18 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
     }
 
     fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
+        let header = self.get_index().get_header().encode();
         let encoded_index = self.get_index().encode();
-        let mut bytes_written = encoded_index.len();
 
-        // Write the index to the file
+        let mut bytes_written = encoded_index.len() + header.len();
+
+        // Write the header
+        writer.write_all(&header)?;
+
+        // Write the index
         writer.write_all(&encoded_index)?;
 
+        // TODO: maybe we need to seek to the end of the index?
         // We want to get all bytes. Since the seek position might change over time (eg. by using
         // read_line) we have to seek to the beginning
         self.reader.seek(SeekFrom::Start(0))?;

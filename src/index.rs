@@ -1,8 +1,40 @@
-use std::io::SeekFrom;
-
-use std::io::{prelude::*, BufReader, Read};
+use std::{
+    convert::TryInto,
+    io::{prelude::*, BufReader, Read, SeekFrom},
+};
 
 use crate::{error::Error, Result};
+
+/// Length of header in bytes
+const HEADER_SIZE: usize = 8;
+
+/// An index header
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub struct Header {
+    /// Count of files lines.
+    /// This value is equivalent to the amount of entries in the index
+    lines: usize,
+}
+
+impl Header {
+    /// Encode a header to bytes.
+    pub(crate) fn encode(&self) -> [u8; HEADER_SIZE] {
+        let enc: [u8; HEADER_SIZE] = self.lines.to_le_bytes().try_into().unwrap();
+        enc
+    }
+
+    /// Decodes a header from a reader
+    pub fn decode<R: Read + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
+        reader.seek(SeekFrom::Start(0))?;
+
+        let mut header: [u8; 8] = [0; 8];
+        reader.read_exact(&mut header)?;
+
+        let lines = usize::from_le_bytes(header);
+
+        Ok(Header { lines })
+    }
+}
 
 /// Contains an in-memory line-index
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,50 +42,11 @@ pub struct Index {
     /// Maps line to seek position in order to seek efficiently. The index within the Vec represents
     /// the line-index in the file
     inner: Vec<u64>,
-    /// The len in bytes of the index
+    /// The len in bytes of the index and the header
     len_bytes: usize,
 }
 
 impl Index {
-    /// Parse an encoded index usually stored in the first line of a file.
-    pub fn parse(data: &[u8]) -> Result<Self> {
-        let data_str = String::from_utf8(data.to_vec())?;
-        let len_bytes = data_str.len() + 1;
-
-        let inner: Vec<u64> = data_str
-            .split(',')
-            .map(|i| -> Result<u64> { i.parse().map_err(|_| Error::MalformedIndex) })
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(Self { inner, len_bytes })
-    }
-
-    /*
-    /// Build a new index for UTF8-text within `reader`. Returns a `Vec<u8>` holding the bytes representing
-    /// the index in encoded format. This is usually needed for building an indexed file.
-    pub fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
-        let mut lines = reader.lines();
-
-        let mut line_index: Vec<u64> = Vec::new();
-
-        let mut curr_offset: u64 = 0;
-        while let Some(line) = lines.next() {
-            line_index.push(curr_offset);
-
-            // Calculate offset of next line. We have to do +1 since we're omitting the \n
-            curr_offset += line?.len() as u64 + 1;
-        }
-
-        // Seeking to 0 doesn't throw an error so we can unwrap it
-        reader.seek(SeekFrom::Start(0)).unwrap();
-
-        Ok(Self {
-            inner: line_index,
-            len_bytes: 0,
-        })
-    }
-    */
-
     /// Build a new index for text within `reader`. Returns a `Vec<u8>` holding the bytes representing
     /// the index in encoded format. This is usually needed for building an indexed file.
     pub fn build<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
@@ -93,18 +86,54 @@ impl Index {
 
     /// Encodes an index into bytes, which can be used to store it into a file.
     pub fn encode(&self) -> Vec<u8> {
-        let mut out = String::new();
-        for (pos, i) in self.inner.iter().enumerate() {
-            out.push_str(&i.to_string());
+        let mut out: Vec<_> = self
+            .inner
+            .iter()
+            .map(|i| i.to_le_bytes())
+            .flatten()
+            .collect();
+        out.push(b'\n');
+        out
+    }
 
-            // skip last ,
-            if pos + 1 < self.inner.len() {
-                out.push(',');
-            }
+    /// Decodes an encoded index
+    pub fn decode<R: Read + Unpin + Seek>(
+        reader: &mut BufReader<R>,
+        header: &Header,
+    ) -> Result<Self> {
+        // Skip header bytes
+        reader.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
+
+        // List of the beginning offset of each line in the file
+        let mut inner: Vec<u64> = Vec::new();
+
+        // Total length until the 'real' data begins
+        let len_bytes = (header.lines * 8) + HEADER_SIZE + 1;
+
+        // Decode line indices
+        let mut buff: [u8; 8] = [0; 8];
+        for _ in 0..header.lines {
+            reader.read_exact(&mut buff)?;
+            inner.push(u64::from_le_bytes(
+                buff.try_into().map_err(|_| Error::MalformedIndex)?,
+            ));
         }
 
-        out.push('\n');
-        out.as_bytes().to_vec()
+        Ok(Self { inner, len_bytes })
+    }
+
+    /// Converts an Index to an index with zero length
+    pub fn zero_len(self) -> Self {
+        let mut s = self;
+        s.len_bytes = 0;
+        s
+    }
+
+    /// Generate a header out of the index
+    pub(crate) fn get_header(&self) -> Header {
+        Header {
+            lines: self.inner.len(),
+        }
     }
 
     /// Get the Index value
@@ -131,18 +160,8 @@ impl Index {
 
     /// Parse an index from a reader.
     pub(super) fn parse_index<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Index> {
-        let mut first_line = Vec::new();
-        reader.read_until(b'\n', &mut first_line)?;
-
-        if first_line.len() <= 1 {
-            return Err(Error::MissingIndex);
-        }
-
-        // Remove last '\n'
-        first_line.pop();
-
-        reader.seek(SeekFrom::Start(0))?;
-
-        Ok(Index::parse(&first_line)?)
+        let header = Header::decode(reader)?;
+        let index = Index::decode(reader, &header)?;
+        Ok(index)
     }
 }
