@@ -76,12 +76,12 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
                 out_buf.extend(b);
             }
 
-            out_buf.pop();
+            //out_buf.pop();
             return Ok(need_read - 1);
         }
 
         self.reader.read_to_end(out_buf)?;
-        out_buf.pop();
+        //out_buf.pop();
         Ok(0)
     }
 

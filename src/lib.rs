@@ -105,6 +105,46 @@ pub trait ReadByLine: IndexableFile {
 
         Err(error::Error::NotFound)
     }
+
+    /// Do a binary search on `ReadByLine` implementing Types, since it provides everything required
+    /// for binary search. Only works with sorted files
+    #[inline]
+    fn binary_search_raw(&mut self, x: &[u8]) -> Result<usize> {
+        self.binary_search_raw_by(|p| p.cmp(x))
+    }
+
+    /// Do a binary search by on `ReadByLine` implementing Types, since it provides everything required
+    /// for binary search. Only works with sorted files
+    fn binary_search_raw_by<F>(&mut self, mut f: F) -> Result<usize>
+    where
+        F: FnMut(&[u8]) -> std::cmp::Ordering,
+    {
+        let mut size = self.total_lines();
+        let mut left = 0;
+        let mut right = size;
+
+        let mut buf = Vec::new();
+
+        while left < right {
+            let mid = left + size / 2;
+
+            buf.clear();
+            self.read_line_raw(mid, &mut buf)?;
+            let cmp = f(&buf);
+
+            if cmp == Ordering::Less {
+                left = mid + 1;
+            } else if cmp == Ordering::Greater {
+                right = mid;
+            } else {
+                return Ok(mid);
+            }
+
+            size = right - left;
+        }
+
+        Err(error::Error::NotFound)
+    }
 }
 
 #[cfg(test)]
