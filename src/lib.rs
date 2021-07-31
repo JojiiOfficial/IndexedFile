@@ -215,10 +215,15 @@ mod tests {
             let read = reader.read_line(line);
 
             assert!(read.is_ok());
-            assert_eq!(original, read.unwrap());
+
+            let mut read = read.unwrap();
+            read.pop();
+
+            assert_eq!(original, read);
 
             let mut buf = Vec::new();
             let res = reader.read_line_raw(line, &mut buf);
+            buf.pop();
             assert!(res.is_ok());
             assert_eq!(original, String::from_utf8(buf).unwrap());
         }
@@ -238,10 +243,15 @@ mod tests {
             let read = reader.read_line(line);
 
             assert!(read.is_ok());
-            assert_eq!(*original, read.unwrap());
+
+            let mut read = read.unwrap();
+            read.pop();
+
+            assert_eq!(*original, read);
 
             let mut buf = Vec::new();
             let res = reader.read_line_raw(line, &mut buf);
+            buf.pop();
             assert!(res.is_ok());
             assert_eq!(*original, String::from_utf8(buf).unwrap());
         }
@@ -256,7 +266,7 @@ mod tests {
 
         for i in 0..indexed_text.total_lines() {
             let read = indexed_text.read_line(i).unwrap();
-            assert_eq!(read.len(), 4);
+            assert_eq!(read.len(), 5);
         }
 
         let mut buf = Vec::new();
