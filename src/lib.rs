@@ -118,6 +118,7 @@ mod tests {
         convert::TryInto,
         fs::read_to_string,
         io::{prelude::*, BufReader},
+        sync::Arc,
     };
 
     #[test]
@@ -136,10 +137,10 @@ mod tests {
             // Test File
             let mut indexed_file = File::open_raw(&file).expect("failed opening indexed file");
             test_reader(&mut indexed_file, &file);
-            assert_eq!(
-                indexed_file.read_all().unwrap(),
-                read_to_string(&file).unwrap()
-            );
+
+            let mut buf = Vec::new();
+            indexed_file.read_all(&mut buf).unwrap();
+            assert_eq!(buf, read_to_string(&file).unwrap().as_bytes());
 
             // Test IndexedString
             let file_content = read_to_string(&file).unwrap();
@@ -204,5 +205,41 @@ mod tests {
             assert!(res.is_ok());
             assert_eq!(*original, String::from_utf8(buf).unwrap());
         }
+    }
+
+    #[test]
+    fn test_no_new_line() {
+        let index = Index::new(vec![0, 5, 10, 15, 20, 25, 30, 35, 40, 45]);
+        let text = "this is a text with fifty characters. this is a te";
+
+        let mut indexed_text = IndexedString::new_custom(text, Arc::new(index.zero_len()));
+
+        for i in 0..indexed_text.total_lines() {
+            let read = indexed_text.read_line(i).unwrap();
+            assert_eq!(read.len(), 4);
+        }
+
+        let mut buf = Vec::new();
+        indexed_text.reader.read_all(&mut buf).unwrap();
+        assert_eq!(buf, text.as_bytes());
+    }
+
+    #[test]
+    fn test_write_to() {
+        let file = "./testfiles/pre_indexed";
+
+        let mut indexed_data = Vec::new();
+        File::open(&file)
+            .expect("failed opening pre_indexed file")
+            .write_to(&mut indexed_data)
+            .unwrap();
+
+        let mut raw_data = Vec::new();
+        std::fs::File::open(file)
+            .unwrap()
+            .read_to_end(&mut raw_data)
+            .unwrap();
+
+        assert_eq!(raw_data, indexed_data);
     }
 }

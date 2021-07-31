@@ -37,27 +37,22 @@ impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
     }
 
     /// Read the `IndexedBufReader` into a newly allocated string
-    pub fn read_all(&mut self) -> Result<String> {
-        let mut out = String::new();
-
-        for line in 0..self.total_lines() {
-            out.push_str(&self.read_line(line)?);
-            out.push('\n');
-        }
-
-        Ok(out)
+    pub fn read_all(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+        let start = self.get_index().get(0)?;
+        self.reader.seek(SeekFrom::Start(start))?;
+        Ok(self.reader.read_to_end(buf)?)
     }
 }
 
 impl<R: Read + Unpin + Seek + Send> Indexable for IndexedBufReader<R> {
-    #[inline]
+    #[inline(always)]
     fn get_index(&self) -> &Index {
         &self.index
     }
 }
 
 impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
-    #[inline]
+    #[inline(always)]
     fn get_offset(&self, line: usize) -> Result<u64> {
         Ok(self.get_index().get(line)? + self.get_index_byte_len() as u64)
     }
@@ -110,20 +105,19 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
         let header = self.get_index().get_header().encode();
         let encoded_index = self.get_index().encode();
 
-        let mut bytes_written = encoded_index.len() + header.len();
-
         // Write the header
         writer.write_all(&header)?;
 
         // Write the index
         writer.write_all(&encoded_index)?;
 
-        // TODO: maybe we need to seek to the end of the index?
-        // We want to get all bytes. Since the seek position might change over time (eg. by using
-        // read_line) we have to seek to the beginning
-        self.reader.seek(SeekFrom::Start(0))?;
+        let mut bytes_written = encoded_index.len() + header.len();
 
-        // Copy file
+        // We want to get all bytes. Since the seek position might change over time (eg. by using
+        // read_line) we have to seek to the beginning of the data
+        self.reader
+            .seek(SeekFrom::Start(self.get_index().len_bytes() as u64))?;
+
         bytes_written += io::copy(&mut self.reader, writer)? as usize;
 
         // Reset file back to start position

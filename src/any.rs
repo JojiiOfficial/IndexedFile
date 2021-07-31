@@ -18,7 +18,7 @@ impl<T: AsRef<[u8]> + Clone + Send + Sync> Anyable for T {}
 pub struct IndexedReader<T: Anyable> {
     // requried to allow duplicating the IndexedReader
     data: ArcAny<T>,
-    reader: IndexedBufReader<Cursor<ArcAny<T>>>,
+    pub(crate) reader: IndexedBufReader<Cursor<ArcAny<T>>>,
 }
 
 /// A wrapper around Arc<T> to allow using an arc as reader for Cursor<Arc<T>>

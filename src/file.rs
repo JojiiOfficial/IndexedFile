@@ -48,8 +48,8 @@ impl File {
 
     /// Read the whole file into a String
     #[inline(always)]
-    pub fn read_all(&mut self) -> Result<String> {
-        self.0.read_all()
+    pub fn read_all(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+        self.0.read_all(buf)
     }
 }
 
@@ -60,8 +60,13 @@ impl TryInto<IndexedString> for File {
     /// into the memory
     fn try_into(self) -> Result<IndexedString> {
         let mut reader = self.0;
-        let content = reader.read_all()?;
-        Ok(IndexedString::new_custom(content, reader.index))
+        let mut buf = Vec::new();
+        reader.read_all(&mut buf)?;
+
+        Ok(IndexedString::new_custom(
+            String::from_utf8(buf)?,
+            reader.index,
+        ))
     }
 }
 
