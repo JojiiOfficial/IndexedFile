@@ -12,8 +12,7 @@ use crate::{index::Index, Indexable, IndexableFile, Result};
 pub trait Anyable: AsRef<[u8]> + Clone + Send + Sync {}
 impl<T: AsRef<[u8]> + Clone + Send + Sync> Anyable for T {}
 
-/// A wrapper around `Anyable` implementing types which implements `ReadByLine` and holds an index of the
-/// lines
+/// A wrapper around `IndexedBufReader` which can be cloned very cheaply
 #[derive(Debug)]
 pub struct IndexedReader<T: Anyable> {
     // requried to allow duplicating the IndexedReader
@@ -50,7 +49,7 @@ impl<T: Anyable> From<&T> for ArcAny<T> {
 }
 
 impl<T: Anyable> IndexedReader<T> {
-    /// Read a string with existing index into ram
+    /// Read data with containing an index into ram.
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
     pub fn new<U: Into<ArcAny<T>>>(s: U) -> Result<IndexedReader<T>> {
@@ -61,7 +60,7 @@ impl<T: Anyable> IndexedReader<T> {
         Ok(Self::from_reader(arc, reader, Arc::new(index)))
     }
 
-    /// Create a new `IndexedString` from unindexed text and builds an index.
+    /// Create a new `IndexedReader` from unindexed data and builds an index.
     pub fn new_raw<U: Into<ArcAny<T>>>(s: U) -> Result<IndexedReader<T>> {
         let arc = s.into();
         let mut reader = BufReader::new(Cursor::new(arc.clone()));
@@ -71,8 +70,9 @@ impl<T: Anyable> IndexedReader<T> {
         Ok(Self::from_reader(arc, reader, Arc::new(index)))
     }
 
-    /// Create a new `IndexedString` from unindexed text and uses `index` as index.
-    /// Expects the index to be properly built.
+    /// Create a new `IndexedReader` from unindexed text and uses `index` as index.
+    /// Expects the index to be properly built. If the provided data does not contain an index, you
+    /// have to pass a `zero_len` index. This can be done by calling `index.zero_len()`.
     pub fn new_custom<U: Into<ArcAny<T>>>(s: U, index: Arc<Index>) -> IndexedReader<T> {
         let arc = s.into();
         let reader = BufReader::new(Cursor::new(arc.clone()));

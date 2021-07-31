@@ -75,20 +75,10 @@ impl TryInto<IndexedReader<Vec<u8>>> for File {
 
     /// Convert a file into an IndexedReader<Vec<u8>> using the files index and reading the files contents
     /// into the memory
-    fn try_into(self) -> Result<IndexedReader<Vec<u8>>> {
-        let mut reader = self.0;
-
+    fn try_into(mut self) -> Result<IndexedReader<Vec<u8>>> {
         let mut data: Vec<u8> = Vec::new();
-
-        let mut buf: Vec<u8> = Vec::new();
-        for line in 0..reader.total_lines() {
-            reader.read_line_raw(line, &mut buf)?;
-            data.extend(&buf);
-            data.push(b'\n');
-            buf.clear();
-        }
-
-        Ok(IndexedReader::new_custom(data, reader.index))
+        self.read_all(&mut data)?;
+        Ok(IndexedReader::new_custom(data, self.0.index))
     }
 }
 
