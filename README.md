@@ -1,5 +1,7 @@
 # IndexedFile
-A library to read lines of a file directly without having to read more than the requested line.
+A library to index files/strings and read them efficiently. 
+This allows reading every line of a file/string directly without having to read everything from the beginning to the given line.
+Both, binary and text files are supported.
 
 # Example
 
@@ -7,18 +9,18 @@ A library to read lines of a file directly without having to read more than the 
 ```rust
 use indexed_file::{Indexable, ReadByLine};
 
-#[async_std::main]
-async fn main() {
-    // Open and index a file
-    let mut file = indexed_file::File::open_raw("<some unindexed file>")
-        .await
-        .unwrap();
+fn main() {
+    // Open and index file
+    let mut file = indexed_file::File::open_raw("./testfiles/LICENSE").unwrap();
 
     // Get line count efficiently without reading the entire file
     let line_count = file.total_lines();
+    println!("File contains {} lines in total", line_count);
 
-    // Read line 30 directly
-    let line_30 = file.read_line(30).await.unwrap();
+    // Read line 32
+    let line_32 = file.read_line(32).unwrap();
+
+    println!("Line 32 content: {}", line_32);
 }
 ```
 
@@ -26,15 +28,12 @@ async fn main() {
 ```rust
 use indexed_file::{Indexable, ReadByLine};
 
-#[async_std::main]
-async fn main() {
+fn main() {
     // Open an indexed file
-    let mut file = indexed_file::File::open("<some indexed file>")
-        .await
-        .unwrap();
+    let mut file = indexed_file::File::open("<some indexed file>").unwrap();
 
-    // Read line 30 directly
-    let line_30 = file.read_line(30).await.unwrap();
+    // Read line 32 directly
+    let line_32 = file.read_line(32).unwrap();
 }
 ```
 
