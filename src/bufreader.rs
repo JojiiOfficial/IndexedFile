@@ -39,7 +39,7 @@ impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
     /// Read the `IndexedBufReader` into a newly allocated string
     pub fn read_all(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         let start = self.get_index().get(0)?;
-        self.reader.seek(SeekFrom::Start(start))?;
+        self.reader.seek(SeekFrom::Start(start as u64))?;
         Ok(self.reader.read_to_end(buf)?)
     }
 }
@@ -53,8 +53,8 @@ impl<R: Read + Unpin + Seek + Send> Indexable for IndexedBufReader<R> {
 
 impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
     #[inline(always)]
-    fn get_offset(&self, line: usize) -> Result<u64> {
-        Ok(self.get_index().get(line)? + self.get_index_byte_len() as u64)
+    fn get_offset(&self, line: usize) -> Result<u32> {
+        Ok(self.get_index().get(line)? + self.get_index_byte_len() as u32)
     }
 
     fn read_current_line(&mut self, out_buf: &mut Vec<u8>, line: usize) -> Result<usize> {
@@ -96,7 +96,7 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
         }
 
         let seek_pos = self.get_offset(line)?;
-        self.reader.seek(SeekFrom::Start(seek_pos))?;
+        self.reader.seek(SeekFrom::Start(seek_pos as u64))?;
         self.last_line = Some(line);
         Ok(())
     }

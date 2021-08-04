@@ -49,7 +49,7 @@ pub trait IndexableFile: Indexable {
 
     /// Should return the offset to seek to given the line-index
     #[inline(always)]
-    fn get_offset(&self, line: usize) -> Result<u64> {
+    fn get_offset(&self, line: usize) -> Result<u32> {
         self.get_index().get(line)
     }
 }
@@ -277,6 +277,11 @@ mod tests {
     #[test]
     fn test_write_to() {
         let file = "./testfiles/pre_indexed";
+
+        let mut indexed_file = File::open_raw("./testfiles/LICENSE").expect("failed opening file");
+        indexed_file
+            .write_to(&mut std::fs::File::create(&file).unwrap())
+            .unwrap();
 
         let mut indexed_data = Vec::new();
         File::open(&file)
