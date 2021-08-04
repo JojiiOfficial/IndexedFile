@@ -14,12 +14,14 @@ pub enum Error {
 }
 
 impl From<FromUtf8Error> for Error {
+    #[inline]
     fn from(_: FromUtf8Error) -> Self {
         Self::UTF8Error
     }
 }
 
 impl From<std::io::Error> for Error {
+    #[inline]
     fn from(e: std::io::Error) -> Self {
         Self::Io(e)
     }
@@ -28,6 +30,7 @@ impl From<std::io::Error> for Error {
 impl std::error::Error for Error {}
 
 impl Display for Error {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }

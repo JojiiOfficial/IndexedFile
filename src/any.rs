@@ -25,24 +25,28 @@ pub struct IndexedReader<T: Anyable> {
 pub struct ArcAny<T: Anyable>(Arc<T>);
 
 impl<T: Anyable> AsRef<[u8]> for ArcAny<T> {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref().as_ref()
     }
 }
 
 impl<T: Anyable> From<T> for ArcAny<T> {
+    #[inline]
     fn from(s: T) -> Self {
         Self(Arc::new(s))
     }
 }
 
 impl From<&str> for ArcAny<String> {
+    #[inline]
     fn from(s: &str) -> Self {
         Self(Arc::new(s.to_owned()))
     }
 }
 
 impl<T: Anyable> From<&T> for ArcAny<T> {
+    #[inline]
     fn from(s: &T) -> Self {
         Self(Arc::new(s.to_owned()))
     }
@@ -52,6 +56,7 @@ impl<T: Anyable> IndexedReader<T> {
     /// Read data with containing an index into ram.
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
+    #[inline]
     pub fn new<U: Into<ArcAny<T>>>(s: U) -> Result<IndexedReader<T>> {
         let arc = s.into();
         let mut reader = BufReader::new(Cursor::new(arc.clone()));
@@ -61,6 +66,7 @@ impl<T: Anyable> IndexedReader<T> {
     }
 
     /// Create a new `IndexedReader` from unindexed data and builds an index.
+    #[inline]
     pub fn new_raw<U: Into<ArcAny<T>>>(s: U) -> Result<IndexedReader<T>> {
         let arc = s.into();
         let mut reader = BufReader::new(Cursor::new(arc.clone()));
@@ -73,12 +79,14 @@ impl<T: Anyable> IndexedReader<T> {
     /// Create a new `IndexedReader` from unindexed text and uses `index` as index.
     /// Expects the index to be properly built. If the provided data does not contain an index, you
     /// have to pass a `zero_len` index. This can be done by calling `index.zero_len()`.
+    #[inline]
     pub fn new_custom<U: Into<ArcAny<T>>>(s: U, index: Arc<Index>) -> IndexedReader<T> {
         let arc = s.into();
         let reader = BufReader::new(Cursor::new(arc.clone()));
         Self::from_reader(arc, reader, index)
     }
 
+    #[inline]
     fn from_reader(
         data: ArcAny<T>,
         reader: BufReader<Cursor<ArcAny<T>>>,
@@ -97,17 +105,17 @@ impl<T: Anyable> Indexable for IndexedReader<T> {
 }
 
 impl<T: Anyable> IndexableFile for IndexedReader<T> {
-    #[inline(always)]
+    #[inline]
     fn read_current_line(&mut self, buf: &mut Vec<u8>, line: usize) -> Result<usize> {
         self.reader.read_current_line(buf, line)
     }
 
-    #[inline(always)]
+    #[inline]
     fn seek_line(&mut self, line: usize) -> Result<()> {
         self.reader.seek_line(line)
     }
 
-    #[inline(always)]
+    #[inline]
     fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
         self.reader.write_to(writer)
     }
@@ -115,7 +123,7 @@ impl<T: Anyable> IndexableFile for IndexedReader<T> {
 
 impl<T: Anyable> Clone for IndexedReader<T> {
     /// Does not clone the entire text but the IndexedString and the Arc reference to the index
-    #[inline(always)]
+    #[inline]
     fn clone(&self) -> Self {
         let new_arc = self.data.clone();
         Self {

@@ -20,6 +20,7 @@ impl File {
     /// Open a new indexed file.
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
+    #[inline]
     pub fn open<P: AsRef<Path>>(path: P) -> Result<File> {
         let mut inner_file = BufReader::new(fs::File::open(path)?);
         let index = Index::parse_index(&mut inner_file)?;
@@ -27,6 +28,7 @@ impl File {
     }
 
     /// Open a non indexed file and generates the index.
+    #[inline]
     pub fn open_raw<P: AsRef<Path>>(path: P) -> Result<File> {
         let mut inner_file = BufReader::new(fs::File::open(path)?);
         let index = Index::build(&mut inner_file)?;
@@ -35,6 +37,7 @@ impl File {
 
     /// Open a non indexed file and uses a custom index `index`.
     /// Expects the index to be properly built.
+    #[inline]
     pub fn open_custom<P: AsRef<Path>>(path: P, index: Arc<Index>) -> Result<File> {
         let inner_file = BufReader::new(fs::File::open(path)?);
         Ok(Self::from_buf_reader(inner_file, index))
@@ -58,6 +61,7 @@ impl TryInto<IndexedString> for File {
 
     /// Convert a file into an IndexedString using the files index and reading the files contents
     /// into the memory
+    #[inline]
     fn try_into(self) -> Result<IndexedString> {
         let mut reader = self.0;
         let mut buf = Vec::new();
@@ -75,6 +79,7 @@ impl TryInto<IndexedReader<Vec<u8>>> for File {
 
     /// Convert a file into an IndexedReader<Vec<u8>> using the files index and reading the files contents
     /// into the memory
+    #[inline]
     fn try_into(mut self) -> Result<IndexedReader<Vec<u8>>> {
         let mut data: Vec<u8> = Vec::new();
         self.read_all(&mut data)?;
@@ -90,16 +95,17 @@ impl Indexable for File {
 }
 
 impl IndexableFile for File {
-    #[inline(always)]
+    #[inline]
     fn read_current_line(&mut self, buf: &mut Vec<u8>, line: usize) -> Result<usize> {
         self.0.read_current_line(buf, line)
     }
 
-    #[inline(always)]
+    #[inline]
     fn seek_line(&mut self, line: usize) -> Result<()> {
         self.0.seek_line(line)
     }
 
+    #[inline]
     fn write_to<W: Write + Unpin + Send>(&mut self, writer: &mut W) -> Result<usize> {
         self.0.write_to(writer)
     }

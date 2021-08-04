@@ -3,6 +3,9 @@ A library to index files/strings and read them efficiently.
 This allows reading every line of a file/string directly without having to read everything from the beginning to the given line.
 Both, binary and text files are supported.
 
+# Index size
+The index is stored in a [CVec](https://github.com/JojiiOfficial/CompressedVec) which means it is stored compressed in the file and also in the applications memory.
+
 # Example
 
 ### Non indexed files
