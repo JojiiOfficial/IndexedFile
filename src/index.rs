@@ -99,19 +99,37 @@ impl Index {
         // Seeking to 0 doesn't throw an error so we can unwrap it
         reader.seek(SeekFrom::Start(0)).unwrap();
 
-        // Storing it in a normal vec first is faster than pushing it repetitively
-        let line_index = CVec::from(line_index);
-
         Ok(Self {
-            inner: line_index,
+            // Storing it in a normal vec first is faster than pushing it repetitively
+            inner: line_index.into(),
             len_bytes: 0,
         })
+    }
+
+    /// Adds a new value to the index
+    #[inline]
+    pub fn add(&mut self, pos: u32) {
+        self.inner.push(pos);
+        // Update length since we (might) have changed the index len
+        self.len_bytes = self.calc_length();
     }
 
     /// Encodes an index into bytes, which can be used to store it into a file.
     #[inline]
     pub fn encode(&self) -> Vec<u8> {
         self.inner.as_bytes()
+    }
+
+    /// Returns true if the index has a given value
+    #[inline]
+    pub fn has(&self, pos: usize) -> bool {
+        self.inner.get(pos).is_some()
+    }
+
+    /// Calculate the index size
+    #[inline]
+    pub fn calc_length(&self) -> usize {
+        HEADER_SIZE + self.inner.as_bytes().len()
     }
 
     /// Decodes an encoded index
@@ -179,5 +197,15 @@ impl Index {
         let header = Header::decode(reader)?;
         let index = Index::decode(reader, &header)?;
         Ok(index)
+    }
+}
+
+impl Extend<u32> for Index {
+    /// Adds the values to the index. This should be preferred over `add` since it is faster
+    fn extend<T: IntoIterator<Item = u32>>(&mut self, iter: T) {
+        self.inner.extend(iter);
+
+        // Update length since we (might) have changed the index len
+        self.len_bytes = self.calc_length();
     }
 }
