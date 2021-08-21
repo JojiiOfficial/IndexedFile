@@ -1,9 +1,12 @@
-use std::{io::SeekFrom, sync::Arc};
-
-use crate::{ReadByLine, Result};
-use std::io::{self, prelude::*, BufReader, Read, Write};
-
 use crate::{index::Index, Indexable, IndexableFile};
+use crate::{ReadByLine, Result};
+
+use compressed_vec::Buffer;
+
+use std::{
+    io::{self, prelude::*, BufReader, Read, SeekFrom, Write},
+    sync::Arc,
+};
 
 /// A wrapper around `BufReader<R>` which implements `ReadByLine` and holds an index of the
 /// lines.
@@ -13,6 +16,7 @@ pub struct IndexedBufReader<R: Read + Unpin + Seek + Send> {
     pub(crate) index: Arc<Index>,
     pub(crate) last_line: Option<usize>,
     pub(crate) curr_pos: u64,
+    pub(crate) index_buf: Buffer,
 }
 
 impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
@@ -26,6 +30,7 @@ impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
             reader,
             last_line: None,
             curr_pos: 0,
+            index_buf: Buffer::new(),
         }
     }
 
@@ -41,7 +46,16 @@ impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
     pub fn read_all(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         let start = self.get_index().get(0)?;
         self.reader.seek(SeekFrom::Start(start as u64))?;
+
+        if !buf.is_empty() {
+            buf.clear();
+        }
         Ok(self.reader.read_to_end(buf)?)
+    }
+
+    #[inline]
+    fn get_index_buffered(&mut self, pos: usize) -> Result<u32> {
+        self.index.get_buffered(&mut self.index_buf, pos)
     }
 }
 
@@ -53,52 +67,46 @@ impl<R: Read + Unpin + Seek + Send> Indexable for IndexedBufReader<R> {
 }
 
 impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
-    #[inline(always)]
-    fn get_offset(&self, line: usize) -> Result<u32> {
-        Ok(self.get_index().get(line)? + self.get_index_byte_len() as u32)
-    }
-
     fn read_current_line(&mut self, out_buf: &mut Vec<u8>, line: usize) -> Result<usize> {
-        let index = self.get_index();
-        let curr_line = index.get(line)?;
+        let curr_line = self.get_index_buffered(line)?;
+        let next_line = self.get_index_buffered(line + 1);
 
         // Get space between current start index and next lines start index. The result is the
         // amount of bytes we have to read.
-        let need_read = index.get(line + 1).map(|i| (i - curr_line) as usize).ok();
+        let need_read = next_line
+            .map(|next_line| (next_line - curr_line) as usize)
+            .ok();
 
+        // If there is a next line to read up to
         if let Some(need_read) = need_read {
-            // If out_buf is empty, we can directly write into it
-            if out_buf.len() == 0 {
+            if out_buf.len() < need_read {
                 out_buf.resize(need_read, 0);
-                self.reader.read_exact(out_buf)?;
-            } else {
-                let mut b = vec![0; need_read];
-                self.reader.read_exact(&mut b)?;
-                out_buf.extend(b);
             }
+            self.reader.read_exact(&mut out_buf[0..need_read])?;
 
-            //out_buf.pop();
-            return Ok(need_read - 1);
+            return Ok(need_read);
         }
 
-        self.reader.read_to_end(out_buf)?;
-        //out_buf.pop();
-        Ok(0)
+        if !out_buf.is_empty() {
+            out_buf.clear();
+        }
+
+        Ok(self.reader.read_to_end(out_buf)?)
     }
 
     fn seek_line(&mut self, line: usize) -> Result<()> {
-        // We don't need to seek if we're sequencially reading the file, aka. if
-        // line == last_line + 1
-        if let Some(last_line) = self.last_line {
+        let last_line = self.last_line;
+        self.last_line = Some(line);
+
+        // We don't need to seek if we're sequencially reading the file
+        if let Some(last_line) = last_line {
             if line == last_line + 1 {
-                self.last_line = Some(line);
                 return Ok(());
             }
         }
 
-        let seek_pos = self.get_offset(line)?;
-        self.reader.seek(SeekFrom::Start(seek_pos as u64))?;
-        self.last_line = Some(line);
+        let seek_pos = self.get_index_buffered(line)? as u64 + self.get_index_byte_len() as u64;
+        self.reader.seek(SeekFrom::Start(seek_pos))?;
         Ok(())
     }
 

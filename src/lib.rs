@@ -221,11 +221,15 @@ mod tests {
 
             assert_eq!(original, read);
 
-            let mut buf = Vec::new();
-            let res = reader.read_line_raw(line, &mut buf);
-            buf.pop();
-            assert!(res.is_ok());
-            assert_eq!(original, String::from_utf8(buf).unwrap());
+            for mut buf in vec![Vec::new(), vec![65u8; 5]] {
+                let res = reader.read_line_raw(line, &mut buf);
+                buf.pop();
+                assert!(res.is_ok());
+                assert_eq!(
+                    original,
+                    String::from_utf8(buf[0..res.unwrap() - 1].to_vec()).unwrap()
+                );
+            }
         }
     }
 
@@ -249,11 +253,15 @@ mod tests {
 
             assert_eq!(*original, read);
 
-            let mut buf = Vec::new();
-            let res = reader.read_line_raw(line, &mut buf);
-            buf.pop();
-            assert!(res.is_ok());
-            assert_eq!(*original, String::from_utf8(buf).unwrap());
+            for mut buf in vec![Vec::new(), vec![65u8; 5]] {
+                let res = reader.read_line_raw(line, &mut buf);
+                buf.pop();
+                assert!(res.is_ok());
+                assert_eq!(
+                    *original,
+                    String::from_utf8(buf[0..res.unwrap() - 1].to_vec()).unwrap()
+                );
+            }
         }
     }
 
@@ -269,9 +277,10 @@ mod tests {
             assert_eq!(read.len(), 5);
         }
 
-        let mut buf = Vec::new();
-        indexed_text.reader.read_all(&mut buf).unwrap();
-        assert_eq!(buf, text.as_bytes());
+        for mut buf in vec![Vec::new(), vec![65u8; 5]] {
+            let read = indexed_text.reader.read_all(&mut buf).unwrap();
+            assert_eq!(&buf[..read], text.as_bytes());
+        }
     }
 
     #[test]

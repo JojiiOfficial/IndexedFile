@@ -1,12 +1,11 @@
-use std::io::Cursor;
 use std::{
-    io::{BufReader, Write},
+    io::{BufReader, Cursor, Write},
     sync::Arc,
 };
 
-use crate::bufreader::IndexedBufReader;
-use crate::ReadByLine;
-use crate::{index::Index, Indexable, IndexableFile, Result};
+use crate::{
+    bufreader::IndexedBufReader, index::Index, Indexable, IndexableFile, ReadByLine, Result,
+};
 
 // little shortcut
 pub trait Anyable: AsRef<[u8]> + Clone + Send + Sync {}

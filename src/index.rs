@@ -3,7 +3,7 @@ use std::{
     io::{prelude::*, BufReader, Read, SeekFrom},
 };
 
-use compressed_vec::CVec;
+use compressed_vec::{Buffer, CVec};
 
 use crate::{error::Error, Result};
 
@@ -153,10 +153,12 @@ impl Index {
     }
 
     /// Converts an `Index` to an index with zero length
+    #[inline]
     pub fn zero_len(self) -> Self {
-        let mut s = self;
-        s.len_bytes = 0;
-        s
+        Self {
+            len_bytes: 0,
+            inner: self.inner,
+        }
     }
 
     /// Generate a header out of the index
@@ -168,8 +170,15 @@ impl Index {
     /// Get the Index value at `pos`
     #[inline]
     pub fn get(&self, pos: usize) -> Result<u32> {
-        let res = self.inner.get(pos).ok_or(Error::OutOfBounds)?;
-        Ok(res)
+        Ok(self.inner.get(pos).ok_or(Error::OutOfBounds)?)
+    }
+
+    /// Get the Index value at `pos` using a buffer for faster sequential reads
+    #[inline]
+    pub fn get_buffered(&self, buf: &mut Buffer, pos: usize) -> Result<u32> {
+        buf.read_buffered(&self.inner, pos)
+            .ok_or(Error::OutOfBounds)
+            .map(|i| *i)
     }
 
     /// Returns the amount of items of the index. On a properly built index, this represents the
