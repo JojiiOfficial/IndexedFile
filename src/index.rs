@@ -49,7 +49,7 @@ impl Header {
 pub struct Index {
     /// Maps line to seek position in order to seek efficiently. The index within the Vec represents
     /// the line-index in the file
-    inner: CVec,
+    inner: Vec<u32>,
     /// The len in bytes of the index and the header
     len_bytes: usize,
 }
@@ -58,9 +58,8 @@ impl Index {
     /// Create a new Index
     #[inline]
     pub fn new<T: IntoIterator<Item = u32>>(line: T) -> Index {
-        let inner = line.into_iter().collect::<CVec>();
-        let inner_byte_size = inner.as_bytes().len();
-
+        let inner = line.into_iter().collect::<Vec<_>>();
+        let inner_byte_size = inner.len() * 4 + 1;
         Self {
             len_bytes: HEADER_SIZE + inner_byte_size,
             inner,
@@ -117,7 +116,14 @@ impl Index {
     /// Encodes an index into bytes, which can be used to store it into a file.
     #[inline]
     pub fn encode(&self) -> Vec<u8> {
-        self.inner.as_bytes()
+        let mut out: Vec<_> = self
+            .inner
+            .iter()
+            .map(|i| i.to_le_bytes())
+            .flatten()
+            .collect();
+        out.push(b'\n');
+        out
     }
 
     /// Returns true if the index has a given value
@@ -129,7 +135,7 @@ impl Index {
     /// Calculate the index size
     #[inline]
     pub fn calc_length(&self) -> usize {
-        HEADER_SIZE + self.inner.as_bytes().len()
+        HEADER_SIZE + self.len() * 4
     }
 
     /// Decodes an encoded index
@@ -140,16 +146,19 @@ impl Index {
         // Skip header bytes
         reader.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
 
-        // Read encoded index
-        let mut raw = vec![0u8; header.items as usize];
-        reader.read_exact(&mut raw)?;
+        // List of the beginning offset of each line in the file
+        let mut inner: Vec<u32> = Vec::new();
 
-        let inner = CVec::from_bytes(&raw)?;
+        // Decode line indices
+        let mut buff = [0u8; 4];
+        for _ in 0..header.items {
+            reader.read_exact(&mut buff)?;
+            inner.push(u32::from_le_bytes(
+                buff.try_into().map_err(|_| Error::MalformedIndex)?,
+            ));
+        }
 
-        Ok(Index {
-            inner,
-            len_bytes: HEADER_SIZE + raw.len(),
-        })
+        Ok(Index::new(inner))
     }
 
     /// Converts an `Index` to an index with zero length
@@ -164,21 +173,24 @@ impl Index {
     /// Generate a header out of the index
     #[inline]
     pub(crate) fn get_header(&self) -> Header {
-        Header::new(self.inner.as_bytes().len())
+        Header::new(self.inner.len())
     }
 
     /// Get the Index value at `pos`
     #[inline]
     pub fn get(&self, pos: usize) -> Result<u32> {
-        Ok(self.inner.get(pos).ok_or(Error::OutOfBounds)?)
+        Ok(*self.inner.get(pos).ok_or(Error::OutOfBounds)?)
     }
 
     /// Get the Index value at `pos` using a buffer for faster sequential reads
     #[inline]
     pub fn get_buffered(&self, buf: &mut Buffer, pos: usize) -> Result<u32> {
+        self.get(pos)
+        /*
         buf.read_buffered(&self.inner, pos)
             .ok_or(Error::OutOfBounds)
             .map(|i| *i)
+            */
     }
 
     /// Returns the amount of items of the index. On a properly built index, this represents the
