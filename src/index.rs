@@ -3,8 +3,6 @@ use std::{
     io::{prelude::*, BufReader, Read, SeekFrom},
 };
 
-use compressed_vec::{Buffer, CVec};
-
 use crate::{error::Error, Result};
 
 /// Length of header in bytes
@@ -32,7 +30,7 @@ impl Header {
     }
 
     /// Decodes a header from a reader
-    pub fn decode<R: Read + Seek>(reader: &mut BufReader<R>) -> Result<Self> {
+    pub fn decode<R: Read + Seek>(reader: &mut R) -> Result<Self> {
         reader.seek(SeekFrom::Start(0))?;
 
         let mut header: [u8; 8] = [0; 8];
@@ -139,10 +137,7 @@ impl Index {
     }
 
     /// Decodes an encoded index
-    pub fn decode<R: Read + Unpin + Seek>(
-        reader: &mut BufReader<R>,
-        header: &Header,
-    ) -> Result<Self> {
+    pub fn decode<R: Read + Unpin + Seek>(reader: &mut R, header: &Header) -> Result<Self> {
         // Skip header bytes
         reader.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
 
@@ -182,17 +177,6 @@ impl Index {
         Ok(*self.inner.get(pos).ok_or(Error::OutOfBounds)?)
     }
 
-    /// Get the Index value at `pos` using a buffer for faster sequential reads
-    #[inline]
-    pub fn get_buffered(&self, buf: &mut Buffer, pos: usize) -> Result<u32> {
-        self.get(pos)
-        /*
-        buf.read_buffered(&self.inner, pos)
-            .ok_or(Error::OutOfBounds)
-            .map(|i| *i)
-            */
-    }
-
     /// Returns the amount of items of the index. On a properly built index, this represents the
     /// amount of lines in the file without counting the index.
     #[inline]
@@ -214,7 +198,7 @@ impl Index {
 
     /// Parse an index from a reader
     #[inline]
-    pub(super) fn parse_index<R: Read + Unpin + Seek>(reader: &mut BufReader<R>) -> Result<Index> {
+    pub(super) fn parse_index<R: Read + Unpin + Seek>(reader: &mut R) -> Result<Index> {
         let header = Header::decode(reader)?;
         let index = Index::decode(reader, &header)?;
         Ok(index)

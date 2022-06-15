@@ -62,7 +62,7 @@ fn sequencial_bench(c: &mut Criterion) {
 
             let mut buff = Vec::new();
             for _i in 0..iters {
-                for line in 0..file.total_lines() - 1 {
+                for line in 0..file.total_lines() {
                     file.read_line_raw(black_box(line), &mut buff).unwrap();
                 }
             }

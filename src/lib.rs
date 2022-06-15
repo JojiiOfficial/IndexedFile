@@ -58,10 +58,18 @@ pub trait IndexableFile: Indexable {
 pub trait ReadByLine: IndexableFile {
     /// Reads the given line
     fn read_line(&mut self, line: usize) -> Result<String> {
-        self.seek_line(line)?;
-        let mut read_data = Vec::new();
-        self.read_current_line(&mut read_data, line)?;
-        Ok(String::from_utf8(read_data)?)
+        let curr = self.get_index().get(line)?;
+        let next = self.get_index().get(line + 1);
+
+        let mut len = 0;
+        if next.is_ok() {
+            let next = next.unwrap();
+            len = next - curr;
+        }
+
+        let mut buf = Vec::with_capacity(len as usize);
+        self.read_line_raw(line, &mut buf)?;
+        Ok(String::from_utf8(buf)?)
     }
 
     /// Reads the given line and stores into `buf`
@@ -151,7 +159,7 @@ pub trait ReadByLine: IndexableFile {
 mod tests {
     use rand::{distributions::Uniform, Rng};
 
-    use crate::{any::IndexedReader, string::IndexedString};
+    use crate::{any::CloneableIndexedReader, string::IndexedString};
 
     use super::*;
     use std::{
@@ -195,7 +203,7 @@ mod tests {
 
             // Test File to indexed Vec<u8>
             let indexed_file = File::open_raw(&file).expect("failed opening indexed file");
-            let indexed_str_file: Result<IndexedReader<Vec<u8>>> = indexed_file.try_into();
+            let indexed_str_file: Result<CloneableIndexedReader<Vec<u8>>> = indexed_file.try_into();
             assert!(indexed_str_file.is_ok());
             test_reader(&mut indexed_str_file.unwrap(), &file);
         }

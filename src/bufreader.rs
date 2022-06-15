@@ -1,8 +1,6 @@
 use crate::{index::Index, Indexable, IndexableFile};
 use crate::{ReadByLine, Result};
 
-use compressed_vec::Buffer;
-
 use std::{
     io::{self, prelude::*, BufReader, Read, SeekFrom, Write},
     sync::Arc,
@@ -11,33 +9,31 @@ use std::{
 /// A wrapper around `BufReader<R>` which implements `ReadByLine` and holds an index of the
 /// lines.
 #[derive(Debug)]
-pub struct IndexedBufReader<R: Read + Unpin + Seek + Send> {
+pub struct IndexedReader<R: Read + Unpin + Seek + Send> {
     pub reader: BufReader<R>,
     pub(crate) index: Arc<Index>,
     pub(crate) last_line: Option<usize>,
     pub(crate) curr_pos: u64,
-    pub(crate) index_buf: Buffer,
 }
 
-impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
+impl<R: Read + Unpin + Seek + Send> IndexedReader<R> {
     /// Creates a new `IndexedBufReader` using a BufReader<R> and an index. The index won't be
     /// validated. Using a malformed index won't return an error but make the IndexedBufReader
     /// useless.
     #[inline]
-    pub fn new(reader: BufReader<R>, index: Arc<Index>) -> IndexedBufReader<R> {
+    pub fn new(reader: R, index: Arc<Index>) -> IndexedReader<R> {
         Self {
             index,
-            reader,
+            reader: BufReader::new(reader),
             last_line: None,
             curr_pos: 0,
-            index_buf: Buffer::new(),
         }
     }
 
     /// Creates a new `IndexedBufReader` with the current index. `reader` should contain the same
     /// data used in `&self` or the index might be invalid for the given reader
     #[inline]
-    pub fn duplicate(&self, reader: BufReader<R>) -> Self {
+    pub fn duplicate(&self, reader: R) -> Self {
         Self::new(reader, Arc::clone(&self.index))
     }
 
@@ -54,22 +50,22 @@ impl<R: Read + Unpin + Seek + Send> IndexedBufReader<R> {
     }
 
     #[inline]
-    fn get_index_buffered(&mut self, pos: usize) -> Result<u32> {
-        self.index.get_buffered(&mut self.index_buf, pos)
+    fn get_pos(&mut self, pos: usize) -> Result<u32> {
+        self.index.get(pos)
     }
 }
 
-impl<R: Read + Unpin + Seek + Send> Indexable for IndexedBufReader<R> {
+impl<R: Read + Unpin + Seek + Send> Indexable for IndexedReader<R> {
     #[inline(always)]
     fn get_index(&self) -> &Index {
         &self.index
     }
 }
 
-impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
+impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedReader<R> {
     fn read_current_line(&mut self, out_buf: &mut Vec<u8>, line: usize) -> Result<usize> {
-        let curr_line = self.get_index_buffered(line)?;
-        let next_line = self.get_index_buffered(line + 1);
+        let curr_line = self.get_pos(line)?;
+        let next_line = self.get_pos(line + 1);
 
         // Get space between current start index and next lines start index. The result is the
         // amount of bytes we have to read.
@@ -105,7 +101,7 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
             }
         }
 
-        let seek_pos = self.get_index_buffered(line)? as u64 + self.get_index_byte_len() as u64;
+        let seek_pos = self.get_pos(line)? as u64 + self.get_index_byte_len() as u64;
         self.reader.seek(SeekFrom::Start(seek_pos))?;
         Ok(())
     }
@@ -137,4 +133,4 @@ impl<R: Read + Unpin + Seek + Send> IndexableFile for IndexedBufReader<R> {
     }
 }
 
-impl<R: Read + Unpin + Seek + Send> ReadByLine for IndexedBufReader<R> {}
+impl<R: Read + Unpin + Seek + Send> ReadByLine for IndexedReader<R> {}

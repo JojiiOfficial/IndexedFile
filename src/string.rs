@@ -1,3 +1,3 @@
-use crate::any::IndexedReader;
+use crate::any::CloneableIndexedReader;
 
-pub type IndexedString = IndexedReader<String>;
+pub type IndexedString = CloneableIndexedReader<String>;

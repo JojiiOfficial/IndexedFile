@@ -3,9 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    bufreader::IndexedBufReader, index::Index, Indexable, IndexableFile, ReadByLine, Result,
-};
+use crate::{bufreader::IndexedReader, index::Index, Indexable, IndexableFile, ReadByLine, Result};
 
 // little shortcut
 pub trait Anyable: AsRef<[u8]> + Clone + Send + Sync {}
@@ -13,10 +11,10 @@ impl<T: AsRef<[u8]> + Clone + Send + Sync> Anyable for T {}
 
 /// A wrapper around `IndexedBufReader` which can be cloned very cheaply
 #[derive(Debug)]
-pub struct IndexedReader<T: Anyable> {
+pub struct CloneableIndexedReader<T: Anyable> {
     // requried to allow duplicating the IndexedReader
     data: ArcAny<T>,
-    pub(crate) reader: IndexedBufReader<Cursor<ArcAny<T>>>,
+    pub(crate) reader: IndexedReader<Cursor<ArcAny<T>>>,
 }
 
 /// A wrapper around Arc<T> to allow using an arc as reader for Cursor<Arc<T>>
@@ -51,14 +49,14 @@ impl<T: Anyable> From<&T> for ArcAny<T> {
     }
 }
 
-impl<T: Anyable> IndexedReader<T> {
+impl<T: Anyable> CloneableIndexedReader<T> {
     /// Read data with containing an index into ram.
     ///
     /// Returns an error if the index is malformed, missing or an io error occurs
     #[inline]
-    pub fn new<U: Into<ArcAny<T>>>(s: U) -> Result<IndexedReader<T>> {
+    pub fn new<U: Into<ArcAny<T>>>(s: U) -> Result<CloneableIndexedReader<T>> {
         let arc = s.into();
-        let mut reader = BufReader::new(Cursor::new(arc.clone()));
+        let mut reader = Cursor::new(arc.clone());
 
         let index = Index::parse_index(&mut reader)?;
         Ok(Self::from_reader(arc, reader, Arc::new(index)))
@@ -66,44 +64,49 @@ impl<T: Anyable> IndexedReader<T> {
 
     /// Create a new `IndexedReader` from unindexed data and builds an index.
     #[inline]
-    pub fn new_raw<U: Into<ArcAny<T>>>(s: U) -> Result<IndexedReader<T>> {
+    pub fn new_raw<U: Into<ArcAny<T>>>(s: U) -> Result<CloneableIndexedReader<T>> {
         let arc = s.into();
-        let mut reader = BufReader::new(Cursor::new(arc.clone()));
+        let reader = Cursor::new(arc.clone());
 
-        let index = Index::build(&mut reader)?;
+        let mut buf_reader = BufReader::new(reader);
+        let index = Index::build(&mut buf_reader)?;
 
-        Ok(Self::from_reader(arc, reader, Arc::new(index)))
+        Ok(Self::from_reader(
+            arc,
+            buf_reader.into_inner(),
+            Arc::new(index),
+        ))
     }
 
     /// Create a new `IndexedReader` from unindexed text and uses `index` as index.
     /// Expects the index to be properly built. If the provided data does not contain an index, you
     /// have to pass a `zero_len` index. This can be done by calling `index.zero_len()`.
     #[inline]
-    pub fn new_custom<U: Into<ArcAny<T>>>(s: U, index: Arc<Index>) -> IndexedReader<T> {
+    pub fn new_custom<U: Into<ArcAny<T>>>(s: U, index: Arc<Index>) -> CloneableIndexedReader<T> {
         let arc = s.into();
-        let reader = BufReader::new(Cursor::new(arc.clone()));
+        let reader = Cursor::new(arc.clone());
         Self::from_reader(arc, reader, index)
     }
 
     #[inline]
     fn from_reader(
         data: ArcAny<T>,
-        reader: BufReader<Cursor<ArcAny<T>>>,
+        reader: Cursor<ArcAny<T>>,
         index: Arc<Index>,
-    ) -> IndexedReader<T> {
-        let reader = IndexedBufReader::new(reader, index);
+    ) -> CloneableIndexedReader<T> {
+        let reader = IndexedReader::new(reader, index);
         Self { data, reader }
     }
 }
 
-impl<T: Anyable> Indexable for IndexedReader<T> {
+impl<T: Anyable> Indexable for CloneableIndexedReader<T> {
     #[inline]
     fn get_index(&self) -> &Index {
         &self.reader.index
     }
 }
 
-impl<T: Anyable> IndexableFile for IndexedReader<T> {
+impl<T: Anyable> IndexableFile for CloneableIndexedReader<T> {
     #[inline]
     fn read_current_line(&mut self, buf: &mut Vec<u8>, line: usize) -> Result<usize> {
         self.reader.read_current_line(buf, line)
@@ -120,18 +123,16 @@ impl<T: Anyable> IndexableFile for IndexedReader<T> {
     }
 }
 
-impl<T: Anyable> Clone for IndexedReader<T> {
+impl<T: Anyable> Clone for CloneableIndexedReader<T> {
     /// Does not clone the entire text but the IndexedString and the Arc reference to the index
     #[inline]
     fn clone(&self) -> Self {
         let new_arc = self.data.clone();
         Self {
-            reader: self
-                .reader
-                .duplicate(BufReader::with_capacity(1, Cursor::new(new_arc.clone()))),
+            reader: self.reader.duplicate(Cursor::new(new_arc.clone())),
             data: new_arc,
         }
     }
 }
 
-impl<T: Anyable> ReadByLine for IndexedReader<T> {}
+impl<T: Anyable> ReadByLine for CloneableIndexedReader<T> {}

@@ -7,14 +7,14 @@ use std::{
 };
 
 use crate::{
-    any::IndexedReader, bufreader, index::Index, string::IndexedString, Indexable, IndexableFile,
-    ReadByLine, Result,
+    any::CloneableIndexedReader, bufreader, index::Index, string::IndexedString, Indexable,
+    IndexableFile, ReadByLine, Result,
 };
 
 /// A wrapper around `std::fs::File` which implements `ReadByLine` and holds an index of the
 /// lines.
 #[derive(Debug)]
-pub struct File(bufreader::IndexedBufReader<fs::File>);
+pub struct File(bufreader::IndexedReader<BufReader<fs::File>>);
 
 impl File {
     /// Open a new indexed file.
@@ -46,7 +46,7 @@ impl File {
     /// Creates a new `File` using an existing `_std::io::BufReader` and index
     #[inline(always)]
     pub fn from_buf_reader(reader: BufReader<fs::File>, index: Arc<Index>) -> File {
-        Self(bufreader::IndexedBufReader::new(reader, index))
+        Self(bufreader::IndexedReader::new(reader, index))
     }
 
     /// Read the whole file into a String
@@ -74,16 +74,16 @@ impl TryInto<IndexedString> for File {
     }
 }
 
-impl TryInto<IndexedReader<Vec<u8>>> for File {
+impl TryInto<CloneableIndexedReader<Vec<u8>>> for File {
     type Error = crate::error::Error;
 
     /// Convert a file into an IndexedReader<Vec<u8>> using the files index and reading the files contents
     /// into the memory
     #[inline]
-    fn try_into(mut self) -> Result<IndexedReader<Vec<u8>>> {
+    fn try_into(mut self) -> Result<CloneableIndexedReader<Vec<u8>>> {
         let mut data: Vec<u8> = Vec::new();
         self.read_all(&mut data)?;
-        Ok(IndexedReader::new_custom(data, self.0.index))
+        Ok(CloneableIndexedReader::new_custom(data, self.0.index))
     }
 }
 
