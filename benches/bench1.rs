@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use indexed_file::{string::IndexedString, File, Indexable, ReadByLine};
+use indexed_file::{mem_file::MemFile, string::IndexedString, File, Indexable, ReadByLine};
 use rand::{distributions::Uniform, Rng};
 use std::fs;
 
@@ -51,6 +51,28 @@ fn random_lines_bench(c: &mut Criterion) {
             start.elapsed()
         });
     });
+
+    c.bench_function("read random lines in memory file new", |b| {
+        b.iter_custom(|iters| {
+            let content = std::fs::read_to_string("./testfiles/LICENSE").unwrap();
+            let file = MemFile::from(content.split('\n'));
+
+            let lines: Vec<_> = rand::thread_rng()
+                .sample_iter(Uniform::new(0, file.len() - 1))
+                .take(file.len())
+                .collect();
+
+            let start = Instant::now();
+
+            for _i in 0..iters {
+                for line in &lines {
+                    file.get(black_box(*line)).unwrap();
+                }
+            }
+
+            start.elapsed()
+        });
+    });
 }
 
 fn sequencial_bench(c: &mut Criterion) {
@@ -86,6 +108,25 @@ fn sequencial_in_memory_bench(c: &mut Criterion) {
                     in_mem_file
                         .read_line_raw(black_box(line), &mut buff)
                         .unwrap();
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    c.bench_function("read sequential in memory file", |b| {
+        b.iter_custom(|iters| {
+            let s = fs::read_to_string("./testfiles/LICENSE").unwrap();
+
+            let mem_file = MemFile::from(s.split('\n'));
+
+            let start = Instant::now();
+
+            for _i in 0..iters {
+                for pos in 0..mem_file.len() {
+                    let _ = mem_file.get_unchecked(black_box(pos));
+                    //let _ = mem_file.get(black_box(pos)).unwrap();
                 }
             }
 

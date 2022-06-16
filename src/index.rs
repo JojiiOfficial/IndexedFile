@@ -3,6 +3,8 @@ use std::{
     io::{prelude::*, BufReader, Read, SeekFrom},
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::{error::Error, Result};
 
 /// Length of header in bytes
@@ -43,11 +45,11 @@ impl Header {
 }
 
 /// Contains an in-memory line-index
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Index {
     /// Maps line to seek position in order to seek efficiently. The index within the Vec represents
     /// the line-index in the file
-    inner: Vec<u32>,
+    pub(crate) inner: Vec<u32>,
     /// The len in bytes of the index and the header
     len_bytes: usize,
 }
@@ -175,6 +177,18 @@ impl Index {
     #[inline]
     pub fn get(&self, pos: usize) -> Result<u32> {
         Ok(*self.inner.get(pos).ok_or(Error::OutOfBounds)?)
+    }
+
+    /// Get the Index value at `pos` without bounds checking
+    #[inline(always)]
+    pub fn get_unchecked(&self, pos: usize) -> usize {
+        self.inner[pos] as usize
+    }
+
+    /// Get the Index value at `pos`
+    #[inline(always)]
+    pub fn get2(&self, pos: usize) -> Option<usize> {
+        self.inner.get(pos).map(|i| *i as usize)
     }
 
     /// Returns the amount of items of the index. On a properly built index, this represents the

@@ -1,5 +1,7 @@
 //!A simple library to index and read large files by its lines using a pregenerated index
 
+pub mod mem_file;
+
 /// Generic implementation to use various types as reader
 pub mod any;
 /// Basic implementation for std::io::BufReader
