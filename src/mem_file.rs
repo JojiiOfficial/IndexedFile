@@ -35,6 +35,20 @@ impl MemFile {
         pos
     }
 
+    /// Replaces an entry with new data. This automatically adjusts the index which means the new input can be any size.
+    /// Depending on amount of data stored in MemFile this can take some time
+    pub fn replace(&mut self, pos: usize, data: &[u8]) -> Option<()> {
+        let (start, end) = self.index_range(pos)?;
+        self.data.splice(start..end, data.iter().copied());
+        let diff = data.len() as isize - (start..end).len() as isize;
+
+        for i in self.index.inner.iter_mut().skip(pos + 1) {
+            *i = (*i as isize + diff) as u32;
+        }
+
+        Some(())
+    }
+
     #[inline]
     pub fn get(&self, pos: usize) -> Option<&[u8]> {
         let (start, end) = self.index_range(pos)?;
@@ -141,14 +155,56 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_mem_file_unicode() {
-        let entries = &[
+    fn test_data() -> &'static [&'static str] {
+        &[
             "俺はプログラミングできねええ",
             "音楽好き",
             "昨日のコーヒー飲んじゃった",
-        ];
-        test_entries(entries);
+            "this is a text",
+        ]
+    }
+
+    #[test]
+    fn test_mem_file_unicode() {
+        test_entries(test_data());
+    }
+
+    #[test]
+    fn test_replace() {
+        let mut m_file = MemFile::new();
+        let data = test_data();
+        for entry in data {
+            m_file.insert(entry.as_bytes());
+        }
+
+        for (pos, i) in data.iter().enumerate() {
+            assert_eq!(m_file.get(pos).unwrap(), i.as_bytes());
+        }
+
+        m_file.replace(0, "lol".as_bytes()).unwrap();
+        assert_eq!(m_file.get(0), Some("lol".as_bytes()));
+        for (pos, i) in data.iter().enumerate().skip(1) {
+            assert_eq!(m_file.get(pos).unwrap(), i.as_bytes());
+        }
+
+        m_file.replace(0, "sometesttextあぶ".as_bytes()).unwrap();
+        assert_eq!(m_file.get(0), Some("sometesttextあぶ".as_bytes()));
+        for (pos, i) in data.iter().enumerate().skip(1) {
+            assert_eq!(m_file.get(pos).unwrap(), i.as_bytes());
+        }
+
+        m_file.replace(0, data[0].as_bytes()).unwrap();
+        for (pos, i) in data.iter().enumerate() {
+            assert_eq!(m_file.get(pos).unwrap(), i.as_bytes());
+        }
+
+        m_file
+            .replace(m_file.len() - 1, "lastlol".as_bytes())
+            .unwrap();
+        for (pos, i) in data.iter().enumerate().rev().skip(1) {
+            assert_eq!(m_file.get(pos).unwrap(), i.as_bytes());
+        }
+        assert_eq!(m_file.get(m_file.len() - 1).unwrap(), "lastlol".as_bytes());
     }
 
     #[test]
